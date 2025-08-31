@@ -20,7 +20,7 @@ exports.handler = async (event) => {
         
         For Lennox: Serial 5608xxxxx = 2006, Week 08
         
-        Return as JSON with these exact fields.`,
+        Return ONLY a JSON object with these exact fields. No additional text.`,
 
       electrical: `Analyze this electrical panel and extract:
         - Panel designation
@@ -29,12 +29,13 @@ exports.handler = async (event) => {
         - Main breaker size
         - Available spaces
         
-        Return as JSON.`,
+        Return ONLY a JSON object.`,
     };
 
+    // Use Claude 3 Haiku which supports direct invocation
     const response = await bedrock
       .invokeModel({
-        modelId: "anthropic.claude-3-sonnet-20240229-v1:0",
+        modelId: "anthropic.claude-instant-v1",
         contentType: "application/json",
         accept: "application/json",
         body: JSON.stringify({
@@ -64,6 +65,7 @@ exports.handler = async (event) => {
       .promise();
 
     const result = JSON.parse(new TextDecoder().decode(response.body));
+    console.log("Bedrock response:", result);
 
     return {
       statusCode: 200,

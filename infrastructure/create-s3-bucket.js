@@ -1,5 +1,6 @@
 // infrastructure/create-s3-bucket.js
 const AWS = require("aws-sdk");
+AWS.config.update({ region: "us-east-1" }); // ADD THIS LINE
 const s3 = new AWS.S3();
 
 async function createBucket() {

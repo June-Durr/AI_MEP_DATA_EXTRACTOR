@@ -1,5 +1,6 @@
 // backend/create-api.js
 const AWS = require("aws-sdk");
+AWS.config.update({ region: "us-east-1" }); // ADD THIS LINE
 const apigateway = new AWS.APIGateway();
 const lambda = new AWS.Lambda();
 

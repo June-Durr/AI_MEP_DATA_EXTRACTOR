@@ -1,5 +1,6 @@
 // infrastructure/create-dynamodb-tables.js
 const AWS = require("aws-sdk");
+AWS.config.update({ region: "us-east-1" }); // ADD THIS LINE
 const dynamodb = new AWS.DynamoDB();
 
 async function createTables() {

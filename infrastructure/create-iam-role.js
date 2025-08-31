@@ -1,5 +1,6 @@
 // infrastructure/create-iam-role.js
 const AWS = require("aws-sdk");
+AWS.config.update({ region: "us-east-1" }); // ADD THIS LINE
 const iam = new AWS.IAM();
 
 async function createLambdaRole() {
