@@ -2,70 +2,64 @@ const AWS = require("aws-sdk");
 const bedrock = new AWS.BedrockRuntime({ region: "us-east-1" });
 
 exports.handler = async (event) => {
-  console.log("Received event:", JSON.stringify(event));
+  console.log("=== LAMBDA STARTED ===");
+  console.log("Event:", JSON.stringify(event, null, 2));
 
   try {
     const { imageBase64, equipmentType } = JSON.parse(event.body);
+    console.log("Image received, length:", imageBase64.length);
+    console.log("Equipment type:", equipmentType);
 
-    // Equipment-specific prompts
-    const prompts = {
-      hvac: `You are an MEP engineer. Analyze this HVAC equipment nameplate and extract:
-        - Manufacturer
-        - Model number
-        - Serial number (decode age if Lennox: first 2 digits = year)
-        - Voltage and phase
-        - Tonnage/capacity
-        - Estimated age
-        - Condition assessment
-        
-        For Lennox: Serial 5608xxxxx = 2006, Week 08
-        
-        Return ONLY a JSON object with these exact fields. No additional text.`,
+    // Use Claude 3 Haiku - supports both text and images
+    console.log("Calling Bedrock with model: anthropic.claude-3-haiku");
 
-      electrical: `Analyze this electrical panel and extract:
-        - Panel designation
-        - Manufacturer (CRITICAL: Flag if FPE or Zinsco)
-        - Voltage configuration
-        - Main breaker size
-        - Available spaces
-        
-        Return ONLY a JSON object.`,
-    };
+    // Build content array - handle test case where imageBase64 might just be "test"
+    const content = [];
+    
+    if (imageBase64 === "test") {
+      // Test mode - just send text
+      content.push({
+        type: "text",
+        text: "This is a test message. Please respond with 'Lambda is working with Claude 3 Haiku!'"
+      });
+    } else {
+      // Real image analysis
+      content.push({
+        type: "text",
+        text: "Please analyze this image and tell me what you see. Focus on any text, labels, or equipment information."
+      });
+      content.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: "image/jpeg",
+          data: imageBase64
+        }
+      });
+    }
 
-    // Use Claude 3 Haiku which supports direct invocation
     const response = await bedrock
       .invokeModel({
-        modelId: "anthropic.claude-instant-v1",
+        modelId: "anthropic.claude-3-haiku",
         contentType: "application/json",
         accept: "application/json",
         body: JSON.stringify({
           anthropic_version: "bedrock-2023-05-31",
-          max_tokens: 1000,
+          max_tokens: 500,
+          temperature: 0.1,
           messages: [
             {
               role: "user",
-              content: [
-                {
-                  type: "image",
-                  source: {
-                    type: "base64",
-                    media_type: "image/jpeg",
-                    data: imageBase64,
-                  },
-                },
-                {
-                  type: "text",
-                  text: prompts[equipmentType] || prompts["hvac"],
-                },
-              ],
-            },
-          ],
+              content: content
+            }
+          ]
         }),
       })
       .promise();
 
+    console.log("✓ Bedrock responded successfully");
     const result = JSON.parse(new TextDecoder().decode(response.body));
-    console.log("Bedrock response:", result);
+    console.log("Result:", result);
 
     return {
       statusCode: 200,
@@ -75,11 +69,13 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         success: true,
-        data: JSON.parse(result.content[0].text),
+        message: "Lambda is working!",
+        data: result.content?.[0]?.text || "No response",
+        timestamp: new Date().toISOString(),
       }),
     };
   } catch (error) {
-    console.error("Error:", error);
+    console.error("❌ Lambda error:", error);
     return {
       statusCode: 500,
       headers: {
@@ -88,7 +84,9 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         error: error.message,
+        errorCode: error.code,
         stack: error.stack,
+        timestamp: new Date().toISOString(),
       }),
     };
   }
