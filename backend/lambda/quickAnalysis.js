@@ -15,32 +15,32 @@ exports.handler = async (event) => {
 
     // Build content array - handle test case where imageBase64 might just be "test"
     const content = [];
-    
+
     if (imageBase64 === "test") {
       // Test mode - just send text
       content.push({
         type: "text",
-        text: "This is a test message. Please respond with 'Lambda is working with Claude 3 Haiku!'"
+        text: "This is a test message. Please respond with 'Lambda is working with Claude 3 Haiku!'",
       });
     } else {
       // Real image analysis
       content.push({
         type: "text",
-        text: "Please analyze this image and tell me what you see. Focus on any text, labels, or equipment information."
+        text: "Please analyze this image and tell me what you see. Focus on any text, labels, or equipment information.",
       });
       content.push({
         type: "image",
         source: {
           type: "base64",
           media_type: "image/jpeg",
-          data: imageBase64
-        }
+          data: imageBase64,
+        },
       });
     }
 
     const response = await bedrock
       .invokeModel({
-        modelId: "anthropic.claude-3-haiku",
+        modelId: "anthropic.claude-3-haiku-20240307-v1:0", // FIXED: Full model ID
         contentType: "application/json",
         accept: "application/json",
         body: JSON.stringify({
@@ -50,9 +50,9 @@ exports.handler = async (event) => {
           messages: [
             {
               role: "user",
-              content: content
-            }
-          ]
+              content: content,
+            },
+          ],
         }),
       })
       .promise();

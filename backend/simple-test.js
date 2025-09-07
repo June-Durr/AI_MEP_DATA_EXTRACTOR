@@ -7,9 +7,9 @@ async function simpleTest() {
     const apiUrl = fs.readFileSync("../api-url.txt", "utf8").trim();
 
     console.log("Testing basic Lambda/API access...");
-    console.log("API URL:", apiUrl + "/analyze");
+    console.log("API URL:", apiUrl);
 
-    const response = await axios.post(`${apiUrl}/analyze`, {
+    const response = await axios.post(apiUrl, {
       imageBase64: "test", // Just a simple string
       equipmentType: "hvac",
     });
