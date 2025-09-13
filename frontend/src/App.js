@@ -1,11 +1,19 @@
-// src/App.js - Working version with regular CSS
+// src/App.js - Updated with routing
 import React, { useState, useEffect } from "react";
+import {
+  BrowserRouter as Router,
+  Route,
+  Routes,
+  Link,
+  useLocation,
+} from "react-router-dom";
+import Camera from "./components/Camera";
+import ProjectList from "./components/ProjectList";
 import "./App.css";
 
-function App() {
+function AppContent() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [testResult, setTestResult] = useState("");
-  const [testing, setTesting] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -20,234 +28,99 @@ function App() {
     };
   }, []);
 
-  const testAPI = async () => {
-    setTesting(true);
-    setTestResult("");
-
-    try {
-      const response = await fetch(process.env.REACT_APP_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          imageBase64: "test",
-          equipmentType: "hvac",
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setTestResult(`✅ API Test Successful! Response: ${data.data}`);
-      } else {
-        setTestResult(
-          `❌ API responded but with error: ${JSON.stringify(data)}`
-        );
-      }
-    } catch (error) {
-      setTestResult(`❌ API Test Failed: ${error.message}`);
-    } finally {
-      setTesting(false);
-    }
-  };
-
   return (
-    <div className="App">
+    <div style={{ minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
       {/* Offline Indicator */}
       {!isOnline && (
-        <div className="alert alert-warning text-center">
+        <div
+          className="alert alert-warning text-center"
+          style={{ margin: 0, borderRadius: 0 }}
+        >
           📡 Offline Mode - Data will sync when connection restored
         </div>
       )}
 
-      {/* Navigation */}
+      {/* Navigation Header */}
       <nav className="navbar">
         <div className="navbar-content">
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <Link
+            to="/"
+            style={{
+              textDecoration: "none",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}
+          >
             <span style={{ fontSize: "24px" }}>🔧</span>
-            <h2 style={{ margin: 0, color: "#333" }}>MEP Survey AI Agent</h2>
-          </div>
+            <span style={{ fontWeight: "600", color: "#333" }}>
+              MEP Survey AI
+            </span>
+          </Link>
 
           <div className="nav-links">
-            <a href="#projects">Projects</a>
-            <button
+            <Link
+              to="/"
+              style={{
+                textDecoration: "none",
+                color: location.pathname === "/" ? "#007bff" : "#666",
+                fontWeight: location.pathname === "/" ? "500" : "normal",
+              }}
+            >
+              Projects
+            </Link>
+            <Link
+              to="/camera"
               className="btn btn-primary"
-              onClick={() => alert("Camera coming soon!")}
+              style={{
+                textDecoration: "none",
+                fontSize: "14px",
+                padding: "8px 16px",
+              }}
             >
               📸 Scan Equipment
-            </button>
+            </Link>
           </div>
         </div>
       </nav>
 
       {/* Main Content */}
-      <div className="container">
-        <div className="card text-center">
-          <h1>🎉 MEP Survey AI Agent is Ready!</h1>
-          <p style={{ fontSize: "18px", color: "#666", margin: "20px 0" }}>
-            Your AI-powered equipment analysis tool for field surveys
-          </p>
-
-          {/* Status Information */}
-          <div className="grid grid-2 mt-4">
-            <div className="card" style={{ backgroundColor: "#f8f9fa" }}>
-              <h3>🌐 Connection Status</h3>
-              <p className={isOnline ? "status-online" : "status-offline"}>
-                {isOnline ? "🟢 Online" : "🔴 Offline"}
-              </p>
-            </div>
-
-            <div className="card" style={{ backgroundColor: "#f8f9fa" }}>
-              <h3>🔧 API Configuration</h3>
-              <p
-                className={
-                  process.env.REACT_APP_API_URL
-                    ? "status-online"
-                    : "status-offline"
-                }
-              >
-                {process.env.REACT_APP_API_URL ? "✅ Configured" : "❌ Not Set"}
-              </p>
-              {process.env.REACT_APP_API_URL && (
-                <small style={{ color: "#666", wordBreak: "break-all" }}>
-                  {process.env.REACT_APP_API_URL}
-                </small>
-              )}
-            </div>
-          </div>
-
-          {/* API Test Section */}
-          <div className="card mt-4">
-            <h3>🧪 Test Your API Connection</h3>
-            <p>Test your AWS Lambda function that analyzes equipment images</p>
-
-            <button
-              className="btn btn-success"
-              onClick={testAPI}
-              disabled={testing || !process.env.REACT_APP_API_URL}
-              style={{
-                marginBottom: "20px",
-                opacity: !process.env.REACT_APP_API_URL || testing ? 0.6 : 1,
-              }}
-            >
-              {testing ? "🔄 Testing..." : "🧪 Test API Connection"}
-            </button>
-
-            {testResult && (
-              <div
-                className="card"
-                style={{
-                  backgroundColor: testResult.includes("✅")
-                    ? "#d4edda"
-                    : "#f8d7da",
-                  color: testResult.includes("✅") ? "#155724" : "#721c24",
-                  border: `1px solid ${
-                    testResult.includes("✅") ? "#c3e6cb" : "#f5c6cb"
-                  }`,
-                }}
-              >
-                <pre
-                  style={{
-                    margin: 0,
-                    whiteSpace: "pre-wrap",
-                    fontSize: "14px",
-                  }}
-                >
-                  {testResult}
-                </pre>
-              </div>
-            )}
-          </div>
-
-          {/* Next Steps */}
-          <div className="card mt-4" style={{ textAlign: "left" }}>
-            <h3>📋 Next Steps:</h3>
-            <ol style={{ padding: "0 20px" }}>
-              <li>
-                <strong>Test API Connection</strong> - Click the test button
-                above
-              </li>
-              <li>
-                <strong>Add Camera Component</strong> - For capturing equipment
-                photos
-              </li>
-              <li>
-                <strong>Create Project Management</strong> - Organize your
-                surveys
-              </li>
-              <li>
-                <strong>Build Equipment Analysis</strong> - Parse AI responses
-              </li>
-              <li>
-                <strong>Generate Reports</strong> - Professional MEP reports
-              </li>
-            </ol>
-          </div>
-
-          {/* Features Preview */}
-          <div className="grid grid-2 mt-4">
-            <div className="card">
-              <h4>📸 Camera Scanner</h4>
-              <p>Capture equipment nameplates with your phone camera</p>
-              <button
-                className="btn btn-primary"
-                disabled
-                style={{ opacity: 0.6 }}
-              >
-                Coming Soon
-              </button>
-            </div>
-
-            <div className="card">
-              <h4>🤖 AI Analysis</h4>
-              <p>Extract model numbers, serial numbers, and specifications</p>
-              <button
-                className="btn btn-primary"
-                disabled
-                style={{ opacity: 0.6 }}
-              >
-                Coming Soon
-              </button>
-            </div>
-
-            <div className="card">
-              <h4>📊 Project Management</h4>
-              <p>Organize surveys by project with progress tracking</p>
-              <button
-                className="btn btn-primary"
-                disabled
-                style={{ opacity: 0.6 }}
-              >
-                Coming Soon
-              </button>
-            </div>
-
-            <div className="card">
-              <h4>📄 Report Generation</h4>
-              <p>Generate professional MEP reports automatically</p>
-              <button
-                className="btn btn-primary"
-                disabled
-                style={{ opacity: 0.6 }}
-              >
-                Coming Soon
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Routes>
+        <Route path="/" element={<ProjectList />} />
+        <Route path="/camera" element={<Camera />} />
+        <Route path="/camera/:projectId" element={<Camera />} />
+      </Routes>
 
       {/* Footer */}
       <footer
-        style={{ textAlign: "center", padding: "40px 20px", color: "#666" }}
+        style={{
+          marginTop: "60px",
+          padding: "40px 20px",
+          textAlign: "center",
+          color: "#666",
+          fontSize: "14px",
+        }}
       >
-        <p>Schnackel Engineers - MEP Survey AI Agent</p>
-        <p style={{ fontSize: "14px", marginTop: "10px" }}>
-          Built for fieldwork • Powered by AWS • Enhanced by AI
-        </p>
+        <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+          <p style={{ margin: "0 0 10px 0" }}>
+            Schnackel Engineers - MEP Survey AI Agent
+          </p>
+          <p style={{ margin: 0 }}>
+            Status: {isOnline ? "🟢 Online" : "🔴 Offline"} | API:{" "}
+            {process.env.REACT_APP_API_URL ? "✅ Configured" : "❌ Not Set"} |
+            Built for fieldwork • Powered by AWS • Enhanced by AI
+          </p>
+        </div>
       </footer>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 
