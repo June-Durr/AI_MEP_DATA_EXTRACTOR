@@ -1,3 +1,4 @@
+// backend/lambda/quickAnalysis.js - Updated with CORS headers
 const AWS = require("aws-sdk");
 const bedrock = new AWS.BedrockRuntime({ region: "us-east-1" });
 
@@ -5,9 +6,35 @@ exports.handler = async (event) => {
   console.log("=== LAMBDA STARTED ===");
   console.log("Event:", JSON.stringify(event, null, 2));
 
+  // CORS headers for browser requests
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+      "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+    "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+    "Content-Type": "application/json",
+  };
+
+  // Handle preflight OPTIONS request
+  if (event.httpMethod === "OPTIONS") {
+    return {
+      statusCode: 200,
+      headers: headers,
+      body: JSON.stringify({ message: "CORS preflight successful" }),
+    };
+  }
+
   try {
-    const { imageBase64, equipmentType } = JSON.parse(event.body);
-    console.log("Image received, length:", imageBase64.length);
+    // Parse the request body
+    let body;
+    if (event.body) {
+      body = JSON.parse(event.body);
+    } else {
+      throw new Error("No request body provided");
+    }
+
+    const { imageBase64, equipmentType } = body;
+    console.log("Image received, length:", imageBase64?.length || 0);
     console.log("Equipment type:", equipmentType);
 
     // Use Claude 3 Haiku - supports both text and images
@@ -26,7 +53,20 @@ exports.handler = async (event) => {
       // Real image analysis
       content.push({
         type: "text",
-        text: "Please analyze this image and tell me what you see. Focus on any text, labels, or equipment information.",
+        text: `You are an expert MEP engineer analyzing equipment nameplates. 
+        Extract the following information from this image:
+        1. Manufacturer
+        2. Model Number
+        3. Serial Number
+        4. Manufacturing Date/Year
+        5. Electrical Specifications (Voltage, Phase, Amps, HP)
+        6. Capacity (BTU, Tons, GPM, etc.)
+        7. Any safety warnings or certifications
+        
+        For Lennox equipment, decode the serial number to determine the age.
+        Format: First 4 digits often indicate year and week (YYWW).
+        
+        Provide a clear, structured response.`,
       });
       content.push({
         type: "image",
@@ -40,7 +80,7 @@ exports.handler = async (event) => {
 
     const response = await bedrock
       .invokeModel({
-        modelId: "anthropic.claude-3-haiku-20240307-v1:0", // FIXED: Full model ID
+        modelId: "anthropic.claude-3-haiku-20240307-v1:0",
         contentType: "application/json",
         accept: "application/json",
         body: JSON.stringify({
@@ -63,13 +103,10 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json",
-      },
+      headers: headers,
       body: JSON.stringify({
         success: true,
-        message: "Lambda is working!",
+        message: "Analysis complete!",
         data: result.content?.[0]?.text || "No response",
         timestamp: new Date().toISOString(),
       }),
@@ -78,11 +115,9 @@ exports.handler = async (event) => {
     console.error("❌ Lambda error:", error);
     return {
       statusCode: 500,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json",
-      },
+      headers: headers,
       body: JSON.stringify({
+        success: false,
         error: error.message,
         errorCode: error.code,
         stack: error.stack,
