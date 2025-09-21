@@ -1,4 +1,4 @@
-// backend/lambda/quickAnalysis.js - Updated with CORS headers
+// backend/lambda/quickAnalysis.js - Enhanced with accurate age calculation
 const AWS = require("aws-sdk");
 const bedrock = new AWS.BedrockRuntime({ region: "us-east-1" });
 
@@ -50,23 +50,44 @@ exports.handler = async (event) => {
         text: "This is a test message. Please respond with 'Lambda is working with Claude 3 Haiku!'",
       });
     } else {
-      // Real image analysis
+      // Real image analysis with enhanced prompt for age calculation
       content.push({
         type: "text",
         text: `You are an expert MEP engineer analyzing equipment nameplates. 
-        Extract the following information from this image:
+        Extract the following information from this nameplate image and CALCULATE the actual age:
+
         1. Manufacturer
-        2. Model Number
+        2. Model Number  
         3. Serial Number
-        4. Manufacturing Date/Year
-        5. Electrical Specifications (Voltage, Phase, Amps, HP)
-        6. Capacity (BTU, Tons, GPM, etc.)
-        7. Any safety warnings or certifications
+        4. Manufacturing Year (calculate from serial number if Lennox)
+        5. Current Age in Years (2025 minus manufacturing year)
+        6. Electrical Specifications (Voltage, Phase, Amps, HP)
+        7. Capacity (BTU, Tons, GPM, etc.)
+        8. Safety warnings or certifications
+
+        FOR LENNOX EQUIPMENT SERIAL NUMBER DECODING:
+        - Format is typically YYWWXXXXXXX where:
+        - YY = Last two digits of year (56 = 2006, 08 = 2008, 15 = 2015, etc.)
+        - WW = Week of manufacture
+        - If year appears to be in 1900s but equipment looks newer, add 100 years
+        - Calculate actual age: 2025 - manufacturing year
         
-        For Lennox equipment, decode the serial number to determine the age.
-        Format: First 4 digits often indicate year and week (YYWW).
+        CRITICAL: Always provide the ACTUAL calculated age in years, not just the method.
         
-        Provide a clear, structured response.`,
+        Example: Serial "5608D05236" = Year 2006, Age = 19 years (2025-2006=19)
+        
+        Provide response in this JSON format:
+        {
+          "manufacturer": "extracted manufacturer",
+          "model": "extracted model", 
+          "serialNumber": "extracted serial",
+          "manufacturingYear": actual_year_number,
+          "currentAge": actual_age_number,
+          "voltage": "voltage if visible",
+          "tonnage": "cooling capacity",
+          "serviceLifeAssessment": "Within service life" or "BEYOND SERVICE LIFE (15+ years)",
+          "confidence": "high/medium/low"
+        }`,
       });
       content.push({
         type: "image",
@@ -85,7 +106,7 @@ exports.handler = async (event) => {
         accept: "application/json",
         body: JSON.stringify({
           anthropic_version: "bedrock-2023-05-31",
-          max_tokens: 500,
+          max_tokens: 1000,
           temperature: 0.1,
           messages: [
             {
@@ -99,7 +120,19 @@ exports.handler = async (event) => {
 
     console.log("✓ Bedrock responded successfully");
     const result = JSON.parse(new TextDecoder().decode(response.body));
-    console.log("Result:", result);
+    console.log("AI Result:", result);
+
+    // Parse the JSON response from Claude
+    let parsedData;
+    try {
+      parsedData = JSON.parse(result.content?.[0]?.text || "{}");
+    } catch (e) {
+      // If JSON parsing fails, return the raw text
+      parsedData = { rawResponse: result.content?.[0]?.text || "No response" };
+    }
+
+    // Add cost tracking
+    const estimatedCost = calculateRequestCost(imageBase64?.length || 0);
 
     return {
       statusCode: 200,
@@ -107,7 +140,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         success: true,
         message: "Analysis complete!",
-        data: result.content?.[0]?.text || "No response",
+        data: parsedData,
+        estimatedCost: estimatedCost,
         timestamp: new Date().toISOString(),
       }),
     };
@@ -126,3 +160,25 @@ exports.handler = async (event) => {
     };
   }
 };
+
+// Cost calculation function
+function calculateRequestCost(imageSize) {
+  // Claude 3 Haiku pricing (as of 2024):
+  // Input: $0.25 per 1M tokens
+  // Output: $1.25 per 1M tokens
+
+  // Estimate tokens (rough approximation)
+  const inputTokens = 1000 + imageSize / 4; // Base prompt + image tokens
+  const outputTokens = 500; // Estimated output
+
+  const inputCost = (inputTokens / 1000000) * 0.25;
+  const outputCost = (outputTokens / 1000000) * 1.25;
+  const totalCost = inputCost + outputCost;
+
+  return {
+    inputTokens: Math.round(inputTokens),
+    outputTokens: outputTokens,
+    estimatedCostUSD: totalCost.toFixed(4),
+    note: "Approximate cost per request",
+  };
+}
