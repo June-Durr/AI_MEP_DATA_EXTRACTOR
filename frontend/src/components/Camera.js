@@ -1,5 +1,5 @@
-// Enhanced Camera workflow with cost tracking and retake functionality
-import React, { useRef, useState, useCallback } from "react";
+// Complete Camera component with full-screen experience like Claude/Instagram
+import React, { useRef, useState, useEffect } from "react";
 
 const Camera = () => {
   const videoRef = useRef(null);
@@ -13,29 +13,180 @@ const Camera = () => {
   const [captureMethod, setCaptureMethod] = useState("camera");
   const [costInfo, setCostInfo] = useState(null);
   const [sessionCosts, setSessionCosts] = useState([]);
+  const [cameraStarted, setCameraStarted] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
 
-  // ... existing camera functions ...
-  console.log("API URL:", process.env.REACT_APP_API_URL);
+  // Clean up camera stream when component unmounts
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [stream]);
 
-  // Enhanced upload and analyze with cost tracking
-  // Find your uploadAndAnalyze function in Camera.js and modify it like this:
+  // Start camera function - iPhone Safari optimized
+  const startCamera = async () => {
+    try {
+      setError(null);
+      setVideoReady(false);
+      console.log("📱 Starting full-screen camera...");
 
+      // iPhone Safari optimized constraints
+      const constraints = {
+        video: {
+          facingMode: { ideal: "environment" }, // Prefer back camera
+          width: { ideal: 1920, max: 1920 },
+          height: { ideal: 1080, max: 1080 },
+        },
+        audio: false,
+      };
+
+      const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log("✅ Camera stream obtained");
+
+      if (videoRef.current) {
+        // Clear any existing stream
+        videoRef.current.srcObject = null;
+
+        // Set new stream
+        videoRef.current.srcObject = newStream;
+
+        // Force video properties for iPhone Safari
+        videoRef.current.autoplay = true;
+        videoRef.current.playsInline = true;
+        videoRef.current.muted = true;
+
+        // Handle video events
+        videoRef.current.onloadeddata = () => {
+          console.log("📹 Video data loaded");
+          videoRef.current
+            .play()
+            .then(() => {
+              console.log("▶️ Video playing");
+              setVideoReady(true);
+            })
+            .catch((err) => {
+              console.error("Play error:", err);
+              // Try again after a short delay
+              setTimeout(() => {
+                videoRef.current
+                  .play()
+                  .then(() => {
+                    setVideoReady(true);
+                  })
+                  .catch(() => {
+                    setError("Could not start video playback");
+                  });
+              }, 500);
+            });
+        };
+
+        // Additional event handlers
+        videoRef.current.oncanplay = () => {
+          console.log("📹 Video can play");
+          setVideoReady(true);
+        };
+
+        videoRef.current.onerror = (e) => {
+          console.error("Video error:", e);
+          setError("Video playback error");
+        };
+      }
+
+      setStream(newStream);
+      setCameraStarted(true);
+    } catch (error) {
+      console.error("❌ Camera error:", error);
+      let errorMessage = "Could not access camera. ";
+
+      if (error.name === "NotAllowedError") {
+        errorMessage += "Please allow camera access and refresh the page.";
+      } else if (error.name === "NotFoundError") {
+        errorMessage += "No camera found on device.";
+      } else if (error.name === "NotReadableError") {
+        errorMessage += "Camera is being used by another app.";
+      } else {
+        errorMessage += `Error: ${error.message}`;
+      }
+
+      setError(errorMessage);
+    }
+  };
+
+  // Stop camera function
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      setStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraStarted(false);
+    setVideoReady(false);
+  };
+
+  // Capture photo function
+  const capturePhoto = () => {
+    try {
+      if (!videoRef.current || !canvasRef.current || !videoReady) {
+        setError("Camera not ready. Please wait.");
+        return;
+      }
+
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      const context = canvas.getContext("2d");
+
+      // Get video dimensions
+      const videoWidth = video.videoWidth || video.clientWidth || 1280;
+      const videoHeight = video.videoHeight || video.clientHeight || 720;
+
+      console.log(`📐 Capturing: ${videoWidth}x${videoHeight}`);
+
+      // Set canvas to video size
+      canvas.width = videoWidth;
+      canvas.height = videoHeight;
+
+      // Draw video frame to canvas
+      context.drawImage(video, 0, 0, videoWidth, videoHeight);
+
+      // Convert to base64
+      const imageData = canvas.toDataURL("image/jpeg", 0.9);
+
+      if (imageData.length < 1000) {
+        setError("Failed to capture image. Please try again.");
+        return;
+      }
+
+      console.log("📸 Photo captured successfully");
+      setCapturedImage(imageData);
+      stopCamera();
+    } catch (error) {
+      console.error("❌ Capture error:", error);
+      setError(`Failed to take photo: ${error.message}`);
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => setCapturedImage(e.target.result);
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Upload and analyze function
   const uploadAndAnalyze = async () => {
     setAnalyzing(true);
     setError(null);
 
-    // 🔍 ADD THIS DEBUG ALERT HERE - AT THE VERY BEGINNING
-    alert("API URL: " + process.env.REACT_APP_API_URL);
-    console.log("API URL:", process.env.REACT_APP_API_URL);
-    console.log("All env vars:", process.env);
-
     try {
       const base64Data = capturedImage.split(",")[1];
       const startTime = Date.now();
-
-      // 🔍 ADD MORE DEBUG INFO
-      console.log("About to call API...");
-      console.log("Image size:", base64Data.length);
 
       const response = await fetch(process.env.REACT_APP_API_URL, {
         method: "POST",
@@ -48,10 +199,6 @@ const Camera = () => {
         }),
       });
 
-      // 🔍 LOG RESPONSE DETAILS
-      console.log("Response status:", response.status);
-      console.log("Response headers:", response.headers);
-
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -59,13 +206,10 @@ const Camera = () => {
       const responseData = await response.json();
       const analysisTime = Date.now() - startTime;
 
-      console.log("Success! Response:", responseData);
-
       if (responseData.success) {
         setExtractedData(responseData.data);
         setCostInfo(responseData.estimatedCost);
 
-        // Track session costs (your existing code)
         const newCost = {
           timestamp: new Date().toLocaleTimeString(),
           cost: responseData.estimatedCost?.estimatedCostUSD || "0.0008",
@@ -76,9 +220,7 @@ const Camera = () => {
         throw new Error(responseData.error || "Analysis failed");
       }
     } catch (error) {
-      console.error("❌ Detailed error:", error);
-      console.error("Error message:", error.message);
-      console.error("Error stack:", error.stack);
+      console.error("❌ Analysis error:", error);
       setError(`Analysis failed: ${error.message}`);
     } finally {
       setAnalyzing(false);
@@ -137,16 +279,13 @@ const Camera = () => {
       )}
 
       {!capturedImage ? (
-        // ... existing capture interface ...
         <div>
+          {/* Input Method Selection */}
           <div className="card" style={{ marginBottom: "20px" }}>
             <h3 style={{ margin: "0 0 15px 0" }}>Choose Input Method:</h3>
-            <div style={{ display: "flex", gap: "15px" }}>
+            <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
               <button
-                onClick={() => {
-                  setCaptureMethod("camera");
-                  // startCamera();
-                }}
+                onClick={() => setCaptureMethod("camera")}
                 className="btn"
                 style={{
                   flex: 1,
@@ -177,22 +316,196 @@ const Camera = () => {
                 💻 Upload File
               </button>
             </div>
+
+            {/* Camera Controls - Full Screen Experience */}
+            {captureMethod === "camera" && (
+              <div>
+                {!cameraStarted ? (
+                  <button
+                    onClick={startCamera}
+                    className="btn btn-primary"
+                    style={{ width: "100%", padding: "15px", fontSize: "18px" }}
+                  >
+                    📷 Open Camera
+                  </button>
+                ) : (
+                  // Full-screen camera overlay
+                  <div
+                    style={{
+                      position: "fixed",
+                      top: 0,
+                      left: 0,
+                      width: "100vw",
+                      height: "100vh",
+                      backgroundColor: "#000",
+                      zIndex: 9999,
+                      display: "flex",
+                      flexDirection: "column",
+                    }}
+                  >
+                    {/* Camera Video - Full Screen */}
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        backgroundColor: "#000",
+                      }}
+                    />
+
+                    {/* Top bar with instructions */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "50px",
+                        left: "20px",
+                        right: "20px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        color: "white",
+                        backgroundColor: "rgba(0,0,0,0.5)",
+                        padding: "10px 15px",
+                        borderRadius: "10px",
+                      }}
+                    >
+                      <button
+                        onClick={stopCamera}
+                        style={{
+                          backgroundColor: "transparent",
+                          border: "none",
+                          color: "white",
+                          fontSize: "16px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        ← Back
+                      </button>
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "500",
+                          textAlign: "center",
+                        }}
+                      >
+                        Point camera at RTU nameplate
+                      </div>
+                      <div style={{ width: "50px" }}></div>
+                    </div>
+
+                    {/* Camera Controls Overlay */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: "50px",
+                        left: "0",
+                        right: "0",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        gap: "40px",
+                        padding: "0 30px",
+                      }}
+                    >
+                      {/* Cancel Button */}
+                      <button
+                        onClick={stopCamera}
+                        style={{
+                          width: "60px",
+                          height: "60px",
+                          borderRadius: "50%",
+                          backgroundColor: "rgba(255,255,255,0.3)",
+                          border: "2px solid white",
+                          color: "white",
+                          fontSize: "20px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                        }}
+                      >
+                        ✕
+                      </button>
+
+                      {/* Capture Button - Large Circle */}
+                      <button
+                        onClick={capturePhoto}
+                        disabled={!videoReady}
+                        style={{
+                          width: "80px",
+                          height: "80px",
+                          borderRadius: "50%",
+                          backgroundColor: videoReady
+                            ? "white"
+                            : "rgba(255,255,255,0.5)",
+                          border: "4px solid white",
+                          cursor: videoReady ? "pointer" : "not-allowed",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "32px",
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        📸
+                      </button>
+
+                      {/* Placeholder for symmetry */}
+                      <div style={{ width: "60px", height: "60px" }}></div>
+                    </div>
+
+                    {/* Loading indicator */}
+                    {!videoReady && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "50%",
+                          left: "50%",
+                          transform: "translate(-50%, -50%)",
+                          color: "white",
+                          backgroundColor: "rgba(0,0,0,0.8)",
+                          padding: "30px",
+                          borderRadius: "15px",
+                          textAlign: "center",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "40px",
+                            height: "40px",
+                            border: "3px solid rgba(255,255,255,0.3)",
+                            borderTop: "3px solid white",
+                            borderRadius: "50%",
+                            animation: "spin 1s linear infinite",
+                            margin: "0 auto 15px auto",
+                          }}
+                        ></div>
+                        <div style={{ fontSize: "16px" }}>
+                          Loading camera...
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
+          {/* Hidden file input */}
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files[0];
-              if (file) {
-                const reader = new FileReader();
-                reader.onload = (e) => setCapturedImage(e.target.result);
-                reader.readAsDataURL(file);
-              }
-            }}
+            onChange={handleFileUpload}
             style={{ display: "none" }}
           />
+
+          {/* Hidden canvas for photo capture */}
+          <canvas ref={canvasRef} style={{ display: "none" }} />
         </div>
       ) : (
         <div>
@@ -382,7 +695,6 @@ const Camera = () => {
 
                 <button
                   onClick={() => {
-                    // Future: Save to project
                     alert("Ready to add project management!");
                   }}
                   className="btn"
