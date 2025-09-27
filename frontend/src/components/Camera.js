@@ -272,46 +272,6 @@ const Camera = () => {
   };
 
   // Capture photo function
-  const capturePhoto = () => {
-    try {
-      if (!videoRef.current || !canvasRef.current || !videoReady) {
-        setError("Camera not ready. Please wait.");
-        return;
-      }
-
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const context = canvas.getContext("2d");
-
-      // Get video dimensions
-      const videoWidth = video.videoWidth || video.clientWidth || 1280;
-      const videoHeight = video.videoHeight || video.clientHeight || 720;
-
-      console.log(`📐 Capturing: ${videoWidth}x${videoHeight}`);
-
-      // Set canvas to video size
-      canvas.width = videoWidth;
-      canvas.height = videoHeight;
-
-      // Draw video frame to canvas
-      context.drawImage(video, 0, 0, videoWidth, videoHeight);
-
-      // Convert to base64
-      const imageData = canvas.toDataURL("image/jpeg", 0.9);
-
-      if (imageData.length < 1000) {
-        setError("Failed to capture image. Please try again.");
-        return;
-      }
-
-      console.log("📸 Photo captured successfully");
-      setCapturedImage(imageData);
-      stopCamera();
-    } catch (error) {
-      console.error("❌ Capture error:", error);
-      setError(`Failed to take photo: ${error.message}`);
-    }
-  };
 
   // Handle file upload
   const handleFileUpload = (event) => {
@@ -460,8 +420,8 @@ const Camera = () => {
                 💻 Upload File
               </button>
             </div>
+
             {/* Camera Controls - Full Screen Experience */}
-            // Updated JSX section for the full-screen camera overlay
             {captureMethod === "camera" && (
               <div>
                 {!cameraStarted ? (
@@ -486,7 +446,6 @@ const Camera = () => {
                       display: "flex",
                       flexDirection: "column",
                     }}
-                    // Add touch handler to help with video playback on iPhone
                     onTouchStart={forceVideoPlay}
                     onClick={forceVideoPlay}
                   >
@@ -502,7 +461,6 @@ const Camera = () => {
                         objectFit: "cover",
                         backgroundColor: "#000",
                       }}
-                      // Remove event handlers from JSX - they're handled in startCamera
                     />
 
                     {/* Top bar with instructions */}
@@ -516,10 +474,9 @@ const Camera = () => {
                         justifyContent: "space-between",
                         alignItems: "center",
                         color: "white",
-                        backgroundColor: "rgba(0,0,0,0.7)",
+                        backgroundColor: "rgba(0,0,0,0.5)",
                         padding: "10px 15px",
                         borderRadius: "10px",
-                        zIndex: 10000,
                       }}
                     >
                       <button
@@ -541,9 +498,7 @@ const Camera = () => {
                           textAlign: "center",
                         }}
                       >
-                        {!videoReady
-                          ? "Loading camera..."
-                          : "Point camera at RTU nameplate"}
+                        Point camera at RTU nameplate
                       </div>
                       <div style={{ width: "50px" }}></div>
                     </div>
@@ -560,7 +515,6 @@ const Camera = () => {
                         alignItems: "center",
                         gap: "40px",
                         padding: "0 30px",
-                        zIndex: 10000,
                       }}
                     >
                       {/* Cancel Button */}
@@ -606,31 +560,11 @@ const Camera = () => {
                         📸
                       </button>
 
-                      {/* Tap to activate hint for iPhone */}
-                      {!videoReady && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            bottom: "120px",
-                            left: "50%",
-                            transform: "translateX(-50%)",
-                            color: "white",
-                            backgroundColor: "rgba(0,0,0,0.8)",
-                            padding: "8px 16px",
-                            borderRadius: "20px",
-                            fontSize: "14px",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          Tap screen if camera doesn't start
-                        </div>
-                      )}
-
                       {/* Placeholder for symmetry */}
                       <div style={{ width: "60px", height: "60px" }}></div>
                     </div>
 
-                    {/* Enhanced Loading indicator */}
+                    {/* Loading indicator */}
                     {!videoReady && (
                       <div
                         style={{
@@ -643,9 +577,7 @@ const Camera = () => {
                           padding: "30px",
                           borderRadius: "15px",
                           textAlign: "center",
-                          zIndex: 10000,
                         }}
-                        // Add touch handler here too
                         onTouchStart={forceVideoPlay}
                         onClick={forceVideoPlay}
                       >
