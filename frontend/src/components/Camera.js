@@ -1,4 +1,4 @@
-// Complete Camera component with full-screen experience like Claude/Instagram
+// Complete Camera component with fixed video element timing issue
 import React, { useRef, useState, useEffect } from "react";
 
 const Camera = () => {
@@ -25,12 +25,13 @@ const Camera = () => {
     };
   }, [stream]);
 
-  // Start camera function - iPhone Safari optimized
-  // Fixed startCamera function for iPhone Safari
+  // Start camera function - iPhone Safari optimized with timing fix
   const startCamera = async () => {
     try {
       setError(null);
       setVideoReady(false);
+      setCameraStarted(true); // Set this first to render video element
+
       console.log("📱 Starting camera for iPhone Safari...");
 
       // Stop any existing stream first
@@ -39,11 +40,19 @@ const Camera = () => {
         setStream(null);
       }
 
+      // Wait a moment for React to render the video element
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Now check if video element exists
+      if (!videoRef.current) {
+        throw new Error("Video element not found after render delay");
+      }
+
       // iPhone Safari optimized constraints
       const constraints = {
         video: {
           facingMode: { ideal: "environment" },
-          width: { ideal: 1280, max: 1920 }, // Reduced initial resolution
+          width: { ideal: 1280, max: 1920 },
           height: { ideal: 720, max: 1080 },
         },
         audio: false,
@@ -55,11 +64,6 @@ const Camera = () => {
         "✅ Camera stream obtained:",
         newStream.getTracks()[0].getSettings()
       );
-
-      // Ensure video element exists
-      if (!videoRef.current) {
-        throw new Error("Video element not found");
-      }
 
       const video = videoRef.current;
 
@@ -150,7 +154,6 @@ const Camera = () => {
       }, 1000);
 
       setStream(newStream);
-      setCameraStarted(true);
     } catch (error) {
       console.error("❌ Camera error:", error);
 
@@ -270,8 +273,6 @@ const Camera = () => {
     setCameraStarted(false);
     setVideoReady(false);
   };
-
-  // Capture photo function
 
   // Handle file upload
   const handleFileUpload = (event) => {
@@ -421,7 +422,7 @@ const Camera = () => {
               </button>
             </div>
 
-            {/* Camera Controls - Full Screen Experience */}
+            {/* Camera Controls - Fixed Structure */}
             {captureMethod === "camera" && (
               <div>
                 {!cameraStarted ? (
@@ -432,8 +433,10 @@ const Camera = () => {
                   >
                     📷 Open Camera
                   </button>
-                ) : (
-                  // Full-screen camera overlay
+                ) : null}
+
+                {/* Camera UI - Always render when camera method selected and started */}
+                {cameraStarted && (
                   <div
                     style={{
                       position: "fixed",
@@ -449,7 +452,7 @@ const Camera = () => {
                     onTouchStart={forceVideoPlay}
                     onClick={forceVideoPlay}
                   >
-                    {/* Camera Video - Full Screen */}
+                    {/* Camera Video - Full Screen - ALWAYS RENDERED */}
                     <video
                       ref={videoRef}
                       autoPlay
@@ -503,11 +506,11 @@ const Camera = () => {
                       <div style={{ width: "50px" }}></div>
                     </div>
 
-                    {/* Camera Controls Overlay */}
+                    {/* Camera Controls Overlay - Moved higher for mobile visibility */}
                     <div
                       style={{
                         position: "absolute",
-                        bottom: "50px",
+                        bottom: "120px", // Moved up from 50px to 120px
                         left: "0",
                         right: "0",
                         display: "flex",
@@ -615,7 +618,7 @@ const Camera = () => {
             style={{ display: "none" }}
           />
 
-          {/* Hidden canvas for photo capture */}
+          {/* Hidden canvas for photo capture - ALWAYS RENDERED */}
           <canvas ref={canvasRef} style={{ display: "none" }} />
         </div>
       ) : (
