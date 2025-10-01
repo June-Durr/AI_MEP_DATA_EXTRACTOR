@@ -1,4 +1,4 @@
-// Complete Camera component with fixed video element timing issue
+// Production Camera component - cleaned up for field use
 import React, { useRef, useState, useEffect } from "react";
 
 const Camera = () => {
@@ -25,14 +25,12 @@ const Camera = () => {
     };
   }, [stream]);
 
-  // Start camera function - iPhone Safari optimized with timing fix
+  // Start camera function - iPhone Safari optimized
   const startCamera = async () => {
     try {
       setError(null);
       setVideoReady(false);
-      setCameraStarted(true); // Set this first to render video element
-
-      console.log("📱 Starting camera for iPhone Safari...");
+      setCameraStarted(true);
 
       // Stop any existing stream first
       if (stream) {
@@ -40,10 +38,9 @@ const Camera = () => {
         setStream(null);
       }
 
-      // Wait a moment for React to render the video element
+      // Wait for React to render the video element
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Now check if video element exists
       if (!videoRef.current) {
         throw new Error("Video element not found after render delay");
       }
@@ -51,46 +48,31 @@ const Camera = () => {
       // iPhone Safari optimized constraints
       const constraints = {
         video: {
-          facingMode: { ideal: "environment" },
+          facingMode: { ideal: "environment" }, // Back camera
           width: { ideal: 1280, max: 1920 },
           height: { ideal: 720, max: 1080 },
         },
         audio: false,
       };
 
-      console.log("🎥 Requesting camera access...");
       const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log(
-        "✅ Camera stream obtained:",
-        newStream.getTracks()[0].getSettings()
-      );
-
       const video = videoRef.current;
 
-      // Clear any existing source
+      // Configure video element
       video.srcObject = null;
-      video.load(); // Reset video element
-
-      // Set video properties BEFORE assigning stream
+      video.load();
       video.autoplay = true;
       video.playsInline = true;
       video.muted = true;
       video.controls = false;
 
-      // Create promise for video ready state
+      // Wait for video to be ready
       const videoReadyPromise = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           reject(new Error("Video loading timeout"));
-        }, 10000); // 10 second timeout
+        }, 10000);
 
-        // Single event handler for when video can play
         const handleCanPlay = () => {
-          console.log(
-            "📹 Video can play - dimensions:",
-            video.videoWidth,
-            "x",
-            video.videoHeight
-          );
           clearTimeout(timeout);
           video.removeEventListener("canplay", handleCanPlay);
           video.removeEventListener("error", handleError);
@@ -98,7 +80,6 @@ const Camera = () => {
         };
 
         const handleError = (e) => {
-          console.error("📹 Video error:", e);
           clearTimeout(timeout);
           video.removeEventListener("canplay", handleCanPlay);
           video.removeEventListener("error", handleError);
@@ -109,54 +90,26 @@ const Camera = () => {
         video.addEventListener("error", handleError);
       });
 
-      // Assign stream to video
       video.srcObject = newStream;
-
-      // Force load the video
-      try {
-        await video.load();
-      } catch (e) {
-        console.log("Load method not supported, continuing...");
-      }
-
-      // Wait for video to be ready
       await videoReadyPromise;
 
-      // Attempt to play video with user interaction
+      // Attempt to play video
       try {
         const playPromise = video.play();
         if (playPromise !== undefined) {
           await playPromise;
         }
-        console.log("▶️ Video playing successfully");
       } catch (playError) {
-        console.warn(
-          "⚠️ Autoplay failed, will play on user interaction:",
-          playError.message
-        );
-        // Don't throw error here - video might still work for capture
+        // Video will play on user interaction
       }
 
       // Final verification
       setTimeout(() => {
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
-          console.log(
-            "✅ Video stream verified:",
-            video.videoWidth,
-            "x",
-            video.videoHeight
-          );
-          setVideoReady(true);
-        } else {
-          console.warn("⚠️ Video dimensions not available, but continuing...");
-          setVideoReady(true); // Allow capture attempt anyway
-        }
+        setVideoReady(true);
       }, 1000);
 
       setStream(newStream);
     } catch (error) {
-      console.error("❌ Camera error:", error);
-
       // Clean up on error
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
@@ -164,18 +117,14 @@ const Camera = () => {
       }
 
       let errorMessage = "Could not access camera. ";
-
       if (error.name === "NotAllowedError") {
         errorMessage += "Please allow camera access and try again.";
       } else if (error.name === "NotFoundError") {
         errorMessage += "No camera found on device.";
       } else if (error.name === "NotReadableError") {
         errorMessage += "Camera is being used by another app.";
-      } else if (error.message === "Video loading timeout") {
-        errorMessage +=
-          "Camera is taking too long to load. Try refreshing the page.";
       } else {
-        errorMessage += `Error: ${error.message}`;
+        errorMessage += error.message;
       }
 
       setError(errorMessage);
@@ -184,7 +133,7 @@ const Camera = () => {
     }
   };
 
-  // Enhanced capture function with better error handling
+  // Capture photo function
   const capturePhoto = async () => {
     try {
       if (!videoRef.current || !canvasRef.current) {
@@ -196,23 +145,18 @@ const Camera = () => {
       const canvas = canvasRef.current;
       const context = canvas.getContext("2d");
 
-      // Ensure video is playing and has dimensions
+      // Ensure video has dimensions
       if (video.videoWidth === 0 || video.videoHeight === 0) {
-        // Try to play video first
         try {
           await video.play();
-          // Wait a moment for dimensions
           await new Promise((resolve) => setTimeout(resolve, 500));
         } catch (e) {
-          console.warn("Could not play video before capture");
+          // Continue anyway
         }
       }
 
-      // Get video dimensions with fallbacks
       const videoWidth = video.videoWidth || video.clientWidth || 1280;
       const videoHeight = video.videoHeight || video.clientHeight || 720;
-
-      console.log(`📐 Capturing: ${videoWidth}x${videoHeight}`);
 
       if (videoWidth === 0 || videoHeight === 0) {
         setError(
@@ -221,17 +165,14 @@ const Camera = () => {
         return;
       }
 
-      // Set canvas to video size
+      // Set canvas to video size and draw frame
       canvas.width = videoWidth;
       canvas.height = videoHeight;
-
-      // Draw video frame to canvas
       context.drawImage(video, 0, 0, videoWidth, videoHeight);
 
-      // Convert to base64 with high quality
+      // Convert to base64
       const imageData = canvas.toDataURL("image/jpeg", 0.95);
 
-      // Validate image data
       if (imageData.length < 1000) {
         setError(
           "Failed to capture image. Please ensure camera is working and try again."
@@ -239,24 +180,21 @@ const Camera = () => {
         return;
       }
 
-      console.log("📸 Photo captured successfully:", imageData.length, "bytes");
       setCapturedImage(imageData);
       stopCamera();
     } catch (error) {
-      console.error("❌ Capture error:", error);
       setError(`Failed to take photo: ${error.message}. Please try again.`);
     }
   };
 
-  // Add this helper function to force video play on user interaction
+  // Force video play on user interaction (for Safari)
   const forceVideoPlay = async () => {
     if (videoRef.current && !videoReady) {
       try {
         await videoRef.current.play();
         setVideoReady(true);
-        console.log("📹 Video playing after user interaction");
       } catch (e) {
-        console.warn("Could not start video playback:", e);
+        // Ignore
       }
     }
   };
@@ -284,16 +222,20 @@ const Camera = () => {
     }
   };
 
-  // Upload and analyze function
+  // Analyze RTU nameplate
   const uploadAndAnalyze = async () => {
     setAnalyzing(true);
     setError(null);
 
     try {
+      // API URL with fallback
+      const apiUrl =
+        process.env.REACT_APP_API_URL ||
+        "https://jqyt5l9x73.execute-api.us-east-1.amazonaws.com/prod";
       const base64Data = capturedImage.split(",")[1];
       const startTime = Date.now();
 
-      const response = await fetch(process.env.REACT_APP_API_URL, {
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -305,7 +247,8 @@ const Camera = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`Analysis failed: ${response.status} - ${errorText}`);
       }
 
       const responseData = await response.json();
@@ -315,6 +258,7 @@ const Camera = () => {
         setExtractedData(responseData.data);
         setCostInfo(responseData.estimatedCost);
 
+        // Track session costs
         const newCost = {
           timestamp: new Date().toLocaleTimeString(),
           cost: responseData.estimatedCost?.estimatedCostUSD || "0.0008",
@@ -325,7 +269,6 @@ const Camera = () => {
         throw new Error(responseData.error || "Analysis failed");
       }
     } catch (error) {
-      console.error("❌ Analysis error:", error);
       setError(`Analysis failed: ${error.message}`);
     } finally {
       setAnalyzing(false);
@@ -422,7 +365,7 @@ const Camera = () => {
               </button>
             </div>
 
-            {/* Camera Controls - Fixed Structure */}
+            {/* Camera Interface */}
             {captureMethod === "camera" && (
               <div>
                 {!cameraStarted ? (
@@ -435,7 +378,7 @@ const Camera = () => {
                   </button>
                 ) : null}
 
-                {/* Camera UI - Always render when camera method selected and started */}
+                {/* Full-Screen Camera */}
                 {cameraStarted && (
                   <div
                     style={{
@@ -452,7 +395,7 @@ const Camera = () => {
                     onTouchStart={forceVideoPlay}
                     onClick={forceVideoPlay}
                   >
-                    {/* Camera Video - Full Screen - ALWAYS RENDERED */}
+                    {/* Camera Video */}
                     <video
                       ref={videoRef}
                       autoPlay
@@ -466,7 +409,7 @@ const Camera = () => {
                       }}
                     />
 
-                    {/* Top bar with instructions */}
+                    {/* Top Navigation */}
                     <div
                       style={{
                         position: "absolute",
@@ -506,11 +449,11 @@ const Camera = () => {
                       <div style={{ width: "50px" }}></div>
                     </div>
 
-                    {/* Camera Controls Overlay - Moved higher for mobile visibility */}
+                    {/* Camera Controls */}
                     <div
                       style={{
                         position: "absolute",
-                        bottom: "120px", // Moved up from 50px to 120px
+                        bottom: "120px",
                         left: "0",
                         right: "0",
                         display: "flex",
@@ -540,7 +483,7 @@ const Camera = () => {
                         ✕
                       </button>
 
-                      {/* Capture Button - Large Circle */}
+                      {/* Capture Button */}
                       <button
                         onClick={capturePhoto}
                         disabled={!videoReady}
@@ -563,7 +506,7 @@ const Camera = () => {
                         📸
                       </button>
 
-                      {/* Placeholder for symmetry */}
+                      {/* Spacer */}
                       <div style={{ width: "60px", height: "60px" }}></div>
                     </div>
 
@@ -609,7 +552,7 @@ const Camera = () => {
             )}
           </div>
 
-          {/* Hidden file input */}
+          {/* Hidden Elements */}
           <input
             ref={fileInputRef}
             type="file"
@@ -617,8 +560,6 @@ const Camera = () => {
             onChange={handleFileUpload}
             style={{ display: "none" }}
           />
-
-          {/* Hidden canvas for photo capture - ALWAYS RENDERED */}
           <canvas ref={canvasRef} style={{ display: "none" }} />
         </div>
       ) : (
@@ -805,21 +746,6 @@ const Camera = () => {
                   style={{ padding: "12px 24px" }}
                 >
                   📸 Analyze Another RTU
-                </button>
-
-                <button
-                  onClick={() => {
-                    alert("Ready to add project management!");
-                  }}
-                  className="btn"
-                  style={{
-                    flex: 1,
-                    backgroundColor: "#fd7e14",
-                    color: "white",
-                    padding: "12px 24px",
-                  }}
-                >
-                  💾 Save to Project (Coming Soon)
                 </button>
               </div>
             </div>

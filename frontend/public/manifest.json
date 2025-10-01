@@ -23,3 +23,13 @@
   "theme_color": "#000000",
   "background_color": "#ffffff"
 }
+{
+  "short_name": "RTU Scanner",
+  "name": "MEP RTU Age Analyzer",
+  "description": "Analyze rooftop unit age from nameplates",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#007bff",
+  "background_color": "#ffffff",
+  "orientation": "portrait"
+}
