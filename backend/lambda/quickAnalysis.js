@@ -1,93 +1,144 @@
-// backend/lambda/quickAnalysis.js - Enhanced with accurate age calculation
+// backend/lambda/quickAnalysis.js - COMPREHENSIVE VERSION
 const AWS = require("aws-sdk");
 const bedrock = new AWS.BedrockRuntime({ region: "us-east-1" });
 
 exports.handler = async (event) => {
   console.log("=== LAMBDA STARTED ===");
-  console.log("Event:", JSON.stringify(event, null, 2));
 
-  // CORS headers for browser requests
   const headers = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers":
-      "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-    "Access-Control-Allow-Methods": "OPTIONS,POST,GET",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "OPTIONS,POST",
     "Content-Type": "application/json",
   };
 
-  // Handle preflight OPTIONS request
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
-      headers: headers,
-      body: JSON.stringify({ message: "CORS preflight successful" }),
+      headers,
+      body: JSON.stringify({ message: "CORS OK" }),
     };
   }
 
   try {
-    // Parse the request body
-    let body;
-    if (event.body) {
-      body = JSON.parse(event.body);
-    } else {
-      throw new Error("No request body provided");
-    }
-
+    let body = JSON.parse(event.body);
     const { imageBase64, equipmentType } = body;
-    console.log("Image received, length:", imageBase64?.length || 0);
-    console.log("Equipment type:", equipmentType);
 
-    // Use Claude 3 Haiku - supports both text and images
-    console.log("Calling Bedrock with model: anthropic.claude-3-haiku");
+    // COMPREHENSIVE PROMPT FOR HVAC EQUIPMENT
+    const comprehensivePrompt = `You are an expert MEP engineer analyzing an HVAC equipment nameplate. Extract ALL visible information and return it in the exact JSON format below.
 
-    // Build content array - handle test case where imageBase64 might just be "test"
+CRITICAL INSTRUCTIONS:
+1. Extract EVERY field you can see on the nameplate
+2. For Lennox serial numbers (format YYWWXXXXXX): YY = year, WW = week
+   - Decode the year: if YY = 56, that's 2006; if YY = 08, that's 2008
+   - Calculate age: 2025 - manufacturing year
+3. Leave fields as null if not visible
+4. For electrical specs, look for MCA, MOCP, RLA, LRA labels
+5. Return confidence level for each major section
+
+RETURN THIS EXACT JSON STRUCTURE:
+{
+  "systemType": {
+    "category": "Packaged Roof Top Unit" or "Split System" or "Other",
+    "configuration": "Electric Cooling / Gas Heat" or "Electric Cooling / Electric Heat" or "Electric Cooling / Heat Pump" or "Electric Cooling / No Heat",
+    "confidence": "high" or "medium" or "low"
+  },
+  "basicInfo": {
+    "manufacturer": "string or null",
+    "model": "string or null",
+    "serialNumber": "string or null",
+    "manufacturingYear": number or null,
+    "currentAge": number or null,
+    "condition": "based on nameplate condition - Good/Fair/Poor",
+    "confidence": "high" or "medium" or "low"
+  },
+  "electrical": {
+    "disconnectSize": "string or null",
+    "fuseSize": "string or null",
+    "voltage": "string or null",
+    "phase": "1" or "3" or null,
+    "kw": "string or null",
+    "confidence": "high" or "medium" or "low"
+  },
+  "compressor1": {
+    "quantity": number or null,
+    "volts": "string or null",
+    "phase": "1" or "3" or null,
+    "rla": "string or null",
+    "lra": "string or null",
+    "mca": "string or null",
+    "confidence": "high" or "medium" or "low"
+  },
+  "compressor2": {
+    "quantity": number or null,
+    "volts": "string or null",
+    "phase": "1" or "3" or null,
+    "rla": "string or null",
+    "lra": "string or null",
+    "mocp": "string or null",
+    "confidence": "high" or "medium" or "low"
+  },
+  "condenserFanMotor": {
+    "quantity": number or null,
+    "volts": "string or null",
+    "phase": "1" or "3" or null,
+    "fla": "string or null",
+    "hp": "string or null",
+    "confidence": "high" or "medium" or "low"
+  },
+  "indoorFanMotor": {
+    "quantity": number or null,
+    "volts": "string or null",
+    "phase": "1" or "3" or null,
+    "fla": "string or null",
+    "hp": "string or null",
+    "confidence": "high" or "medium" or "low"
+  },
+  "gasInformation": {
+    "gasType": "Natural Gas" or "Propane" or null,
+    "inputMinBTU": "string or null",
+    "inputMaxBTU": "string or null",
+    "outputCapacityBTU": "string or null",
+    "gasPipeSize": "string or null",
+    "confidence": "high" or "medium" or "low"
+  },
+  "cooling": {
+    "tonnage": "string or null (calculate from model if possible)",
+    "refrigerant": "string or null",
+    "confidence": "high" or "medium" or "low"
+  },
+  "serviceLife": {
+    "assessment": "Within service life (0-15 years)" or "BEYOND SERVICE LIFE (15+ years)" or "Unable to determine",
+    "recommendation": "Reuse" or "Replace" or "Further evaluation needed",
+    "ashrae_standard": "ASHRAE median service life for RTU: 15 years"
+  },
+  "warnings": [
+    "list any safety concerns, illegible fields, or critical issues"
+  ],
+  "overallConfidence": "high" or "medium" or "low"
+}
+
+EXAMPLE FOR LENNOX LCA120H2RN1Y, Serial 5608D05236:
+- Serial 5608 = Year 2006 (56 = 06, 08 = week 8)
+- Age = 2025 - 2006 = 19 years
+- Model LCA120 = 10 tons (120 MBH / 12 = 10 tons)
+- Status: BEYOND SERVICE LIFE
+
+Extract all visible information now.`;
+
+    console.log("Calling Claude with comprehensive prompt...");
+
     const content = [];
 
     if (imageBase64 === "test") {
-      // Test mode - just send text
       content.push({
         type: "text",
-        text: "This is a test message. Please respond with 'Lambda is working with Claude 3 Haiku!'",
+        text: "This is a test. Respond with 'Lambda is working!'",
       });
     } else {
-      // Real image analysis with enhanced prompt for age calculation
       content.push({
         type: "text",
-        text: `You are an expert MEP engineer analyzing equipment nameplates. 
-        Extract the following information from this nameplate image and CALCULATE the actual age:
-
-        1. Manufacturer
-        2. Model Number  
-        3. Serial Number
-        4. Manufacturing Year (calculate from serial number if Lennox)
-        5. Current Age in Years (2025 minus manufacturing year)
-        6. Electrical Specifications (Voltage, Phase, Amps, HP)
-        7. Capacity (BTU, Tons, GPM, etc.)
-        8. Safety warnings or certifications
-
-        FOR LENNOX EQUIPMENT SERIAL NUMBER DECODING:
-        - Format is typically YYWWXXXXXXX where:
-        - YY = Last two digits of year (56 = 2006, 08 = 2008, 15 = 2015, etc.)
-        - WW = Week of manufacture
-        - If year appears to be in 1900s but equipment looks newer, add 100 years
-        - Calculate actual age: 2025 - manufacturing year
-        
-        CRITICAL: Always provide the ACTUAL calculated age in years, not just the method.
-        
-        Example: Serial "5608D05236" = Year 2006, Age = 19 years (2025-2006=19)
-        
-        Provide response in this JSON format:
-        {
-          "manufacturer": "extracted manufacturer",
-          "model": "extracted model", 
-          "serialNumber": "extracted serial",
-          "manufacturingYear": actual_year_number,
-          "currentAge": actual_age_number,
-          "voltage": "voltage if visible",
-          "tonnage": "cooling capacity",
-          "serviceLifeAssessment": "Within service life" or "BEYOND SERVICE LIFE (15+ years)",
-          "confidence": "high/medium/low"
-        }`,
+        text: comprehensivePrompt,
       });
       content.push({
         type: "image",
@@ -106,7 +157,7 @@ exports.handler = async (event) => {
         accept: "application/json",
         body: JSON.stringify({
           anthropic_version: "bedrock-2023-05-31",
-          max_tokens: 1000,
+          max_tokens: 2000, // INCREASED for comprehensive response
           temperature: 0.1,
           messages: [
             {
@@ -118,30 +169,29 @@ exports.handler = async (event) => {
       })
       .promise();
 
-    console.log("✓ Bedrock responded successfully");
     const result = JSON.parse(new TextDecoder().decode(response.body));
-    console.log("AI Result:", result);
+    console.log("✓ Bedrock responded");
 
-    // Parse the JSON response from Claude
     let parsedData;
     try {
-      parsedData = JSON.parse(result.content?.[0]?.text || "{}");
+      // Extract JSON from Claude's response
+      const textContent = result.content?.[0]?.text || "{}";
+      parsedData = JSON.parse(textContent);
     } catch (e) {
-      // If JSON parsing fails, return the raw text
-      parsedData = { rawResponse: result.content?.[0]?.text || "No response" };
+      console.log("JSON parse error, returning raw:", e);
+      parsedData = {
+        error: "Could not parse AI response",
+        rawResponse: result.content?.[0]?.text,
+      };
     }
-
-    // Add cost tracking
-    const estimatedCost = calculateRequestCost(imageBase64?.length || 0);
 
     return {
       statusCode: 200,
       headers: headers,
       body: JSON.stringify({
         success: true,
-        message: "Analysis complete!",
+        message: "Complete analysis finished",
         data: parsedData,
-        estimatedCost: estimatedCost,
         timestamp: new Date().toISOString(),
       }),
     };
@@ -153,32 +203,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         success: false,
         error: error.message,
-        errorCode: error.code,
-        stack: error.stack,
         timestamp: new Date().toISOString(),
       }),
     };
   }
 };
-
-// Cost calculation function
-function calculateRequestCost(imageSize) {
-  // Claude 3 Haiku pricing (as of 2024):
-  // Input: $0.25 per 1M tokens
-  // Output: $1.25 per 1M tokens
-
-  // Estimate tokens (rough approximation)
-  const inputTokens = 1000 + imageSize / 4; // Base prompt + image tokens
-  const outputTokens = 500; // Estimated output
-
-  const inputCost = (inputTokens / 1000000) * 0.25;
-  const outputCost = (outputTokens / 1000000) * 1.25;
-  const totalCost = inputCost + outputCost;
-
-  return {
-    inputTokens: Math.round(inputTokens),
-    outputTokens: outputTokens,
-    estimatedCostUSD: totalCost.toFixed(4),
-    note: "Approximate cost per request",
-  };
-}

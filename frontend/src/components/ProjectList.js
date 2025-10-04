@@ -1,29 +1,46 @@
-// src/components/ProjectList.js
+// frontend/src/components/ProjectList.js - With Report Integration
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import ReportGenerator from "./ReportGenerator";
 
 const ProjectList = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reportProjectId = searchParams.get("report");
+
   const [projects, setProjects] = useState([]);
   const [showNewProject, setShowNewProject] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [viewingReport, setViewingReport] = useState(null);
+
   const [newProject, setNewProject] = useState({
     name: "",
     projectNumber: "",
     clientName: "",
     address: "",
     surveyDate: new Date().toISOString().split("T")[0],
+    squareFootage: "",
   });
 
   useEffect(() => {
     loadProjects();
   }, []);
 
+  useEffect(() => {
+    if (reportProjectId) {
+      const project = projects.find((p) => p.id === reportProjectId);
+      if (project) {
+        setViewingReport(project);
+        // Clear the URL parameter
+        setSearchParams({});
+      }
+    }
+  }, [reportProjectId, projects]);
+
   const loadProjects = () => {
     const savedProjects = localStorage.getItem("mep-survey-projects");
     if (savedProjects) {
       setProjects(JSON.parse(savedProjects));
     } else {
-      // Sample project for demonstration
       const sampleProjects = [
         {
           id: "demo-1",
@@ -32,9 +49,10 @@ const ProjectList = () => {
           clientName: "Bay Harbor Properties",
           address: "123 Harbor Dr, Miami, FL",
           surveyDate: "2025-09-07",
+          squareFootage: "6007",
           status: "In Progress",
           archived: false,
-          equipment: [],
+          rtus: [],
         },
       ];
       setProjects(sampleProjects);
@@ -59,7 +77,7 @@ const ProjectList = () => {
       ...newProject,
       status: "Draft",
       archived: false,
-      equipment: [],
+      rtus: [],
       createdAt: new Date().toISOString(),
     };
 
@@ -72,16 +90,13 @@ const ProjectList = () => {
       clientName: "",
       address: "",
       surveyDate: new Date().toISOString().split("T")[0],
+      squareFootage: "",
     });
     setShowNewProject(false);
   };
 
   const archiveProject = (projectId) => {
-    if (
-      window.confirm(
-        "Archive this project? It will be moved to archived projects."
-      )
-    ) {
+    if (window.confirm("Archive this project?")) {
       const updatedProjects = projects.map((project) =>
         project.id === projectId
           ? { ...project, archived: true, status: "Archived" }
@@ -112,21 +127,31 @@ const ProjectList = () => {
   };
 
   const getProjectStats = (project) => {
-    const equipmentCount = project.equipment?.length || 0;
-    const completedCount =
-      project.equipment?.filter((eq) => eq.status === "analyzed").length || 0;
-
-    return {
-      equipmentCount,
-      completedCount,
-      progressPercent:
-        equipmentCount > 0
-          ? Math.round((completedCount / equipmentCount) * 100)
-          : 0,
-    };
+    const rtuCount = project.rtus?.length || 0;
+    return { rtuCount };
   };
 
-  // Filter projects based on current view
+  // If viewing a report, show only the report
+  if (viewingReport) {
+    return (
+      <div className="container">
+        <div style={{ marginBottom: "20px" }}>
+          <button
+            onClick={() => setViewingReport(null)}
+            className="btn"
+            style={{ padding: "10px 20px" }}
+          >
+            ← Back to Projects
+          </button>
+        </div>
+        <ReportGenerator
+          project={viewingReport}
+          squareFootage={viewingReport.squareFootage}
+        />
+      </div>
+    );
+  }
+
   const activeProjects = projects.filter((p) => !p.archived);
   const archivedProjects = projects.filter((p) => p.archived);
   const displayProjects = showArchived ? archivedProjects : activeProjects;
@@ -148,7 +173,7 @@ const ProjectList = () => {
               MEP Survey Projects
             </h1>
             <p style={{ margin: 0, color: "#666" }}>
-              Manage your field survey projects
+              Manage field surveys and generate reports
             </p>
           </div>
 
@@ -208,7 +233,7 @@ const ProjectList = () => {
             }}
           >
             <h3 style={{ color: "#388e3c", margin: "0 0 10px 0" }}>
-              Completed
+              Total RTUs
             </h3>
             <p
               style={{
@@ -218,7 +243,10 @@ const ProjectList = () => {
                 margin: 0,
               }}
             >
-              {activeProjects.filter((p) => p.status === "Completed").length}
+              {activeProjects.reduce(
+                (sum, p) => sum + (p.rtus?.length || 0),
+                0
+              )}
             </p>
           </div>
           <div
@@ -255,7 +283,6 @@ const ProjectList = () => {
                   display: "block",
                   fontSize: "14px",
                   fontWeight: "500",
-                  color: "#333",
                   marginBottom: "5px",
                 }}
               >
@@ -285,7 +312,6 @@ const ProjectList = () => {
                   display: "block",
                   fontSize: "14px",
                   fontWeight: "500",
-                  color: "#333",
                   marginBottom: "5px",
                 }}
               >
@@ -318,7 +344,6 @@ const ProjectList = () => {
                   display: "block",
                   fontSize: "14px",
                   fontWeight: "500",
-                  color: "#333",
                   marginBottom: "5px",
                 }}
               >
@@ -348,7 +373,6 @@ const ProjectList = () => {
                   display: "block",
                   fontSize: "14px",
                   fontWeight: "500",
-                  color: "#333",
                   marginBottom: "5px",
                 }}
               >
@@ -371,13 +395,44 @@ const ProjectList = () => {
               />
             </div>
 
-            <div style={{ gridColumn: "span 2" }}>
+            <div>
               <label
                 style={{
                   display: "block",
                   fontSize: "14px",
                   fontWeight: "500",
-                  color: "#333",
+                  marginBottom: "5px",
+                }}
+              >
+                Square Footage
+              </label>
+              <input
+                type="number"
+                value={newProject.squareFootage}
+                onChange={(e) =>
+                  setNewProject({
+                    ...newProject,
+                    squareFootage: e.target.value,
+                  })
+                }
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  fontSize: "16px",
+                  boxSizing: "border-box",
+                }}
+                placeholder="e.g., 6007"
+              />
+            </div>
+
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "14px",
+                  fontWeight: "500",
                   marginBottom: "5px",
                 }}
               >
@@ -443,7 +498,7 @@ const ProjectList = () => {
             </h3>
             <p style={{ color: "#666", marginBottom: "30px" }}>
               {showArchived
-                ? "Archived projects will appear here when you archive completed surveys."
+                ? "Archived projects will appear here."
                 : "Create your first MEP survey project to get started."}
             </p>
             {!showArchived && (
@@ -466,7 +521,6 @@ const ProjectList = () => {
                 className="card"
                 style={{
                   marginBottom: "20px",
-                  transition: "box-shadow 0.3s ease",
                   opacity: project.archived ? 0.8 : 1,
                 }}
               >
@@ -500,17 +554,13 @@ const ProjectList = () => {
                               ? "#d4edda"
                               : project.status === "Archived"
                               ? "#f8f9fa"
-                              : project.status === "In Progress"
-                              ? "#cce5ff"
-                              : "#f8f9fa",
+                              : "#cce5ff",
                           color:
                             project.status === "Completed"
                               ? "#155724"
                               : project.status === "Archived"
                               ? "#6c757d"
-                              : project.status === "In Progress"
-                              ? "#004085"
-                              : "#495057",
+                              : "#004085",
                         }}
                       >
                         {project.status}
@@ -541,46 +591,17 @@ const ProjectList = () => {
                         <strong>Survey Date:</strong>{" "}
                         {new Date(project.surveyDate).toLocaleDateString()}
                       </p>
+                      {project.squareFootage && (
+                        <p style={{ margin: "5px 0" }}>
+                          <strong>Area:</strong>{" "}
+                          {parseFloat(project.squareFootage).toLocaleString()}{" "}
+                          sq.ft.
+                        </p>
+                      )}
+                      <p style={{ margin: "5px 0" }}>
+                        <strong>RTUs Captured:</strong> {stats.rtuCount}
+                      </p>
                     </div>
-
-                    {/* Progress Bar */}
-                    {stats.equipmentCount > 0 && !project.archived && (
-                      <div style={{ marginTop: "15px" }}>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            fontSize: "14px",
-                            color: "#666",
-                            marginBottom: "5px",
-                          }}
-                        >
-                          <span>Equipment Progress</span>
-                          <span>
-                            {stats.completedCount}/{stats.equipmentCount}{" "}
-                            completed
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            width: "100%",
-                            backgroundColor: "#e9ecef",
-                            borderRadius: "4px",
-                            height: "8px",
-                          }}
-                        >
-                          <div
-                            style={{
-                              backgroundColor: "#007bff",
-                              height: "8px",
-                              borderRadius: "4px",
-                              width: `${stats.progressPercent}%`,
-                              transition: "width 0.3s ease",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   <div
@@ -602,41 +623,27 @@ const ProjectList = () => {
                             style={{
                               fontSize: "14px",
                               padding: "8px 16px",
-                              width: "140px",
+                              width: "160px",
                             }}
                           >
-                            📸 Add Equipment
+                            📸{" "}
+                            {stats.rtuCount > 0
+                              ? `Add RTU #${stats.rtuCount + 1}`
+                              : "Start Survey"}
                           </button>
                         </Link>
 
-                        <button
-                          onClick={() => alert("Survey details coming soon!")}
-                          className="btn"
-                          style={{
-                            fontSize: "14px",
-                            padding: "8px 16px",
-                            width: "140px",
-                            backgroundColor: "white",
-                            color: "#333",
-                            border: "1px solid #ddd",
-                          }}
-                        >
-                          📋 View Survey
-                        </button>
-
-                        {stats.completedCount > 0 && (
+                        {stats.rtuCount > 0 && (
                           <button
-                            onClick={() =>
-                              alert("Report generation coming soon!")
-                            }
+                            onClick={() => setViewingReport(project)}
                             className="btn btn-success"
                             style={{
                               fontSize: "14px",
                               padding: "8px 16px",
-                              width: "140px",
+                              width: "160px",
                             }}
                           >
-                            📄 Generate Report
+                            📄 View Report
                           </button>
                         )}
 
@@ -646,10 +653,9 @@ const ProjectList = () => {
                           style={{
                             fontSize: "14px",
                             padding: "8px 16px",
-                            width: "140px",
+                            width: "160px",
                             backgroundColor: "#ffc107",
                             color: "#856404",
-                            border: "1px solid #ffc107",
                           }}
                         >
                           📁 Archive
@@ -661,10 +667,9 @@ const ProjectList = () => {
                           style={{
                             fontSize: "14px",
                             padding: "8px 16px",
-                            width: "140px",
+                            width: "160px",
                             backgroundColor: "#dc3545",
                             color: "white",
-                            border: "1px solid #dc3545",
                           }}
                         >
                           🗑️ Delete
@@ -678,22 +683,20 @@ const ProjectList = () => {
                           style={{
                             fontSize: "14px",
                             padding: "8px 16px",
-                            width: "140px",
+                            width: "160px",
                           }}
                         >
                           🔄 Restore
                         </button>
-
                         <button
                           onClick={() => deleteProject(project.id)}
                           className="btn"
                           style={{
                             fontSize: "14px",
                             padding: "8px 16px",
-                            width: "140px",
+                            width: "160px",
                             backgroundColor: "#dc3545",
                             color: "white",
-                            border: "1px solid #dc3545",
                           }}
                         >
                           🗑️ Delete
