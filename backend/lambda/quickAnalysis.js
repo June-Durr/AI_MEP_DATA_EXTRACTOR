@@ -1,4 +1,4 @@
-// backend/lambda/quickAnalysis.js - COMPREHENSIVE VERSION
+// backend/lambda/quickAnalysis.js - COMPLETE FIXED VERSION
 const AWS = require("aws-sdk");
 const bedrock = new AWS.BedrockRuntime({ region: "us-east-1" });
 
@@ -24,8 +24,10 @@ exports.handler = async (event) => {
     let body = JSON.parse(event.body);
     const { imageBase64, equipmentType } = body;
 
-    // COMPREHENSIVE PROMPT FOR HVAC EQUIPMENT
+    // COMPREHENSIVE PROMPT WITH JSON-ONLY ENFORCEMENT
     const comprehensivePrompt = `You are an expert MEP engineer analyzing an HVAC equipment nameplate. Extract ALL visible information and return it in the exact JSON format below.
+
+CRITICAL: Your response must be ONLY valid JSON with no additional text before or after. Do not include explanations, markdown code blocks, or any other text. Start your response with { and end with }.
 
 CRITICAL INSTRUCTIONS:
 1. Extract EVERY field you can see on the nameplate
@@ -35,8 +37,21 @@ CRITICAL INSTRUCTIONS:
 3. Leave fields as null if not visible
 4. For electrical specs, look for MCA, MOCP, RLA, LRA labels
 5. Return confidence level for each major section
+6. **COOLING TONNAGE - CRITICAL**: This is the COOLING CAPACITY, NOT the unit weight:
+   - Look for labels: "COOLING CAPACITY", "TONS", "TON", "BTU/H", "MBH"
+   - Common conversions: 
+     * 60,000 BTU/hr = 5 tons
+     * 120,000 BTU/hr (or 120 MBH) = 10 tons
+     * 180,000 BTU/hr (or 180 MBH) = 15 tons
+   - Model number clues:
+     * ZCA060xxx = 5 tons (060 = 60,000 BTU/hr)
+     * LGA180xxx = 15 tons (180 = 180,000 BTU/hr)
+     * LCA120xxx = 10 tons (120 = 120,000 BTU/hr)
+   - NEVER report shipping weight (e.g., "5 LBS 6 OZ") as tonnage
+   - NEVER report refrigerant charge weight as tonnage
+   - Format output as: "5 tons", "10 tons", "15 tons"
 
-RETURN THIS EXACT JSON STRUCTURE:
+RETURN THIS EXACT JSON STRUCTURE (NO OTHER TEXT):
 {
   "systemType": {
     "category": "Packaged Roof Top Unit" or "Split System" or "Other",
@@ -103,7 +118,7 @@ RETURN THIS EXACT JSON STRUCTURE:
     "confidence": "high" or "medium" or "low"
   },
   "cooling": {
-    "tonnage": "string or null (calculate from model if possible)",
+    "tonnage": "string - COOLING CAPACITY ONLY (e.g. '5 tons', '10 tons', '15 tons'). Calculate from BTU/hr or model number. NEVER use unit weight.",
     "refrigerant": "string or null",
     "confidence": "high" or "medium" or "low"
   },
@@ -124,7 +139,13 @@ EXAMPLE FOR LENNOX LCA120H2RN1Y, Serial 5608D05236:
 - Model LCA120 = 10 tons (120 MBH / 12 = 10 tons)
 - Status: BEYOND SERVICE LIFE
 
-Extract all visible information now.`;
+EXAMPLE FOR LENNOX ZCA06054BN1Y, Serial 0608xxxxx:
+- Serial 0608 = Year 2006, week 8
+- Age = 2025 - 2006 = 19 years  
+- Model ZCA060 = 5 tons (060 = 60,000 BTU/hr / 12,000 = 5 tons)
+- Status: BEYOND SERVICE LIFE
+
+Extract all visible information now. RETURN ONLY JSON, NO OTHER TEXT.`;
 
     console.log("Calling Claude with comprehensive prompt...");
 
@@ -157,7 +178,7 @@ Extract all visible information now.`;
         accept: "application/json",
         body: JSON.stringify({
           anthropic_version: "bedrock-2023-05-31",
-          max_tokens: 2000, // INCREASED for comprehensive response
+          max_tokens: 2000,
           temperature: 0.1,
           messages: [
             {
@@ -176,13 +197,49 @@ Extract all visible information now.`;
     try {
       // Extract JSON from Claude's response
       const textContent = result.content?.[0]?.text || "{}";
-      parsedData = JSON.parse(textContent);
+
+      // Try to find JSON in the response (handle extra text before/after)
+      let jsonStr = textContent;
+
+      // Look for JSON object boundaries
+      const jsonStart = textContent.indexOf("{");
+      const jsonEnd = textContent.lastIndexOf("}");
+
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        jsonStr = textContent.substring(jsonStart, jsonEnd + 1);
+      }
+
+      parsedData = JSON.parse(jsonStr);
     } catch (e) {
-      console.log("JSON parse error, returning raw:", e);
-      parsedData = {
-        error: "Could not parse AI response",
-        rawResponse: result.content?.[0]?.text,
-      };
+      console.log("JSON parse error, attempting to clean response:", e);
+
+      // Try one more time with more aggressive cleaning
+      try {
+        const textContent = result.content?.[0]?.text || "{}";
+
+        // Remove markdown code blocks if present
+        let cleaned = textContent
+          .replace(/```json\n?/g, "")
+          .replace(/```\n?/g, "");
+
+        // Find the first { and last }
+        const firstBrace = cleaned.indexOf("{");
+        const lastBrace = cleaned.lastIndexOf("}");
+
+        if (firstBrace !== -1 && lastBrace !== -1) {
+          cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+          parsedData = JSON.parse(cleaned);
+        } else {
+          throw new Error("No valid JSON found");
+        }
+      } catch (e2) {
+        console.log("Still failed to parse, returning error:", e2);
+        parsedData = {
+          error: "Could not parse AI response",
+          rawResponse: result.content?.[0]?.text,
+          parseError: e2.message,
+        };
+      }
     }
 
     return {

@@ -1,7 +1,7 @@
-// frontend/src/components/ReportGenerator.js - Schnackel Format Report
+// frontend/src/components/ReportGenerator.js - Enhanced for Live Preview
 import React from "react";
 
-const ReportGenerator = ({ project, squareFootage }) => {
+const ReportGenerator = ({ project, squareFootage, isLivePreview = false }) => {
   if (!project || !project.rtus || project.rtus.length === 0) {
     return (
       <div className="card" style={{ padding: "40px", textAlign: "center" }}>
@@ -13,6 +13,29 @@ const ReportGenerator = ({ project, squareFootage }) => {
 
   const rtus = project.rtus;
   const rtuCount = rtus.length;
+
+  // Helper to safely extract data from nested structure
+  const extractRTUData = (rtu) => {
+    const data = rtu.data || {};
+
+    // Handle both old flat structure and new nested structure
+    return {
+      manufacturer:
+        data.basicInfo?.manufacturer || data.manufacturer || "Unknown",
+      model: data.basicInfo?.model || data.model || "Unknown",
+      serialNumber: data.basicInfo?.serialNumber || data.serialNumber || "",
+      year:
+        data.basicInfo?.manufacturingYear ||
+        data.manufacturingYear ||
+        "Unknown",
+      age: data.basicInfo?.currentAge || data.currentAge || 0,
+      tonnage: data.cooling?.tonnage || data.tonnage || "Unknown tonnage",
+      serviceLifeAssessment:
+        data.serviceLife?.assessment || data.serviceLifeAssessment || "",
+      recommendation:
+        data.serviceLife?.recommendation || data.recommendation || "",
+    };
+  };
 
   // Convert number to word
   const numberToWord = (num) => {
@@ -36,7 +59,8 @@ const ReportGenerator = ({ project, squareFootage }) => {
   const calculateTotalTonnage = () => {
     let total = 0;
     rtus.forEach((rtu) => {
-      const tonnage = rtu.data.tonnage || "";
+      const rtuData = extractRTUData(rtu);
+      const tonnage = rtuData.tonnage || "";
       const match = tonnage.match(/(\d+\.?\d*)/);
       if (match) {
         total += parseFloat(match[1]);
@@ -47,7 +71,7 @@ const ReportGenerator = ({ project, squareFootage }) => {
 
   const totalTonnage = calculateTotalTonnage();
 
-  // Calculate cooling estimate from square footage (rule of thumb: 1 ton per 400-600 sqft)
+  // Calculate cooling estimate from square footage
   const estimateCooling = () => {
     if (!squareFootage) return null;
     const sqft = parseFloat(squareFootage);
@@ -59,9 +83,10 @@ const ReportGenerator = ({ project, squareFootage }) => {
   const coolingEstimate = estimateCooling();
 
   // Check if any RTU is beyond service life
-  const hasOldUnits = rtus.some(
-    (rtu) => rtu.data.currentAge && rtu.data.currentAge > 15
-  );
+  const hasOldUnits = rtus.some((rtu) => {
+    const rtuData = extractRTUData(rtu);
+    return rtuData.age && rtuData.age > 15;
+  });
 
   // Generate RTU descriptions
   const generateRTUDescriptions = () => {
@@ -78,11 +103,11 @@ const ReportGenerator = ({ project, squareFootage }) => {
 
     return rtus
       .map((rtu, index) => {
-        const data = rtu.data;
+        const rtuData = extractRTUData(rtu);
         const ordinal = ordinals[index] || `${index + 1}th`;
-        const tonnage = data.tonnage || "unknown tonnage";
-        const manufacturer = data.manufacturer || "unknown manufacturer";
-        const year = data.manufacturingYear || "unknown year";
+        const tonnage = rtuData.tonnage;
+        const manufacturer = rtuData.manufacturer;
+        const year = rtuData.year;
 
         return `The ${ordinal} unit is ${
           tonnage.match(/\d/) ? "an" : "a"
@@ -97,9 +122,10 @@ const ReportGenerator = ({ project, squareFootage }) => {
       return "With ASHRAE's estimated median service life of a packaged roof top unit being 15 years, the units are within their expected service life.";
     }
 
-    const oldCount = rtus.filter(
-      (rtu) => rtu.data.currentAge && rtu.data.currentAge > 15
-    ).length;
+    const oldCount = rtus.filter((rtu) => {
+      const rtuData = extractRTUData(rtu);
+      return rtuData.age && rtuData.age > 15;
+    }).length;
 
     if (oldCount === rtuCount) {
       return `With ASHRAE's estimated median service life of a packaged roof top unit being 15 years, ${
@@ -126,6 +152,24 @@ const ReportGenerator = ({ project, squareFootage }) => {
 
   return (
     <div className="card" style={{ maxWidth: "900px", margin: "0 auto" }}>
+      {/* Live Preview Badge */}
+      {isLivePreview && (
+        <div
+          style={{
+            backgroundColor: "#28a745",
+            color: "white",
+            padding: "10px 20px",
+            borderRadius: "8px",
+            marginBottom: "20px",
+            textAlign: "center",
+            fontWeight: "bold",
+          }}
+        >
+          🔴 LIVE REPORT PREVIEW • {rtuCount} RTU{rtuCount > 1 ? "s" : ""}{" "}
+          Captured
+        </div>
+      )}
+
       {/* Schnackel Header */}
       <div
         style={{
@@ -187,9 +231,9 @@ const ReportGenerator = ({ project, squareFootage }) => {
             textDecoration: "underline",
           }}
         >
-          Investigation Performed by:
+          Survey Performed by:
         </h3>
-        <p>Surveyor Name</p>
+        <p>{project.surveyorName || "Surveyor Name"}</p>
         <p>Schnackel Engineers</p>
         <p>Telephone No. 402-391-7680, Fax No. 402-391-7488</p>
       </div>
@@ -316,38 +360,41 @@ const ReportGenerator = ({ project, squareFootage }) => {
             </tr>
           </thead>
           <tbody>
-            {rtus.map((rtu, index) => (
-              <tr key={rtu.id}>
-                <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                  #{rtu.number}
-                </td>
-                <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                  {rtu.data.manufacturer}
-                </td>
-                <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                  {rtu.data.model}
-                </td>
-                <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                  {rtu.data.tonnage}
-                </td>
-                <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                  {rtu.data.manufacturingYear}
-                </td>
-                <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                  {rtu.data.currentAge} years
-                </td>
-                <td
-                  style={{
-                    border: "1px solid #ddd",
-                    padding: "10px",
-                    color: rtu.data.currentAge > 15 ? "#d32f2f" : "#388e3c",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {rtu.data.currentAge > 15 ? "Replace" : "OK"}
-                </td>
-              </tr>
-            ))}
+            {rtus.map((rtu, index) => {
+              const rtuData = extractRTUData(rtu);
+              return (
+                <tr key={rtu.id}>
+                  <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                    #{rtu.number}
+                  </td>
+                  <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                    {rtuData.manufacturer}
+                  </td>
+                  <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                    {rtuData.model}
+                  </td>
+                  <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                    {rtuData.tonnage}
+                  </td>
+                  <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                    {rtuData.year}
+                  </td>
+                  <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                    {rtuData.age} years
+                  </td>
+                  <td
+                    style={{
+                      border: "1px solid #ddd",
+                      padding: "10px",
+                      color: rtuData.age > 15 ? "#d32f2f" : "#388e3c",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {rtuData.age > 15 ? "Replace" : "OK"}
+                  </td>
+                </tr>
+              );
+            })}
             <tr style={{ backgroundColor: "#f0f0f0", fontWeight: "bold" }}>
               <td
                 colSpan="3"
@@ -369,44 +416,46 @@ const ReportGenerator = ({ project, squareFootage }) => {
         </table>
       </div>
 
-      {/* Export Buttons */}
-      <div
-        style={{
-          marginTop: "40px",
-          paddingTop: "20px",
-          borderTop: "2px solid #ddd",
-          display: "flex",
-          gap: "15px",
-        }}
-      >
-        <button
-          onClick={() => window.print()}
-          className="btn btn-primary"
-          style={{ flex: 1, padding: "12px" }}
-        >
-          🖨️ Print Report
-        </button>
-        <button
-          onClick={() => {
-            const reportText = document.querySelector(".card").innerText;
-            const blob = new Blob([reportText], { type: "text/plain" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${project.projectNumber}_MEP_Report.txt`;
-            a.click();
-          }}
-          className="btn"
+      {/* Export Buttons - Only show when not in live preview */}
+      {!isLivePreview && (
+        <div
           style={{
-            flex: 1,
-            padding: "12px",
-            backgroundColor: "#28a745",
-            color: "white",
+            marginTop: "40px",
+            paddingTop: "20px",
+            borderTop: "2px solid #ddd",
+            display: "flex",
+            gap: "15px",
           }}
         >
-          💾 Export Report
-        </button>
-      </div>
+          <button
+            onClick={() => window.print()}
+            className="btn btn-primary"
+            style={{ flex: 1, padding: "12px" }}
+          >
+            🖨️ Print Report
+          </button>
+          <button
+            onClick={() => {
+              const reportText = document.querySelector(".card").innerText;
+              const blob = new Blob([reportText], { type: "text/plain" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `${project.projectNumber}_MEP_Report.txt`;
+              a.click();
+            }}
+            className="btn"
+            style={{
+              flex: 1,
+              padding: "12px",
+              backgroundColor: "#28a745",
+              color: "white",
+            }}
+          >
+            💾 Export Report
+          </button>
+        </div>
+      )}
 
       {/* Report Metadata */}
       <div
@@ -429,6 +478,17 @@ const ReportGenerator = ({ project, squareFootage }) => {
           <strong>Survey Date:</strong>{" "}
           {new Date(project.surveyDate).toLocaleDateString()}
         </p>
+        {isLivePreview && (
+          <p
+            style={{
+              margin: "10px 0 0 0",
+              color: "#28a745",
+              fontWeight: "bold",
+            }}
+          >
+            ⚡ This report updates automatically as you capture RTUs
+          </p>
+        )}
       </div>
     </div>
   );

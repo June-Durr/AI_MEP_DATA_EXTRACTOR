@@ -1,4 +1,4 @@
-// frontend/src/components/Camera.js - Multi-RTU Survey System
+// frontend/src/components/Camera.js - Multi-RTU Survey System with Fixes
 import React, { useRef, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
@@ -18,6 +18,13 @@ const Camera = () => {
   const [captureMethod, setCaptureMethod] = useState("camera");
   const [cameraStarted, setCameraStarted] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+
+  // User input state - DEFAULT TO ELECTRIC
+  const [userInputs, setUserInputs] = useState({
+    condition: "Good",
+    heatType: "Electric", // Changed default from "Gas" to "Electric"
+    gasPipeSize: "",
+  });
 
   // Project and RTU state
   const [project, setProject] = useState(null);
@@ -55,8 +62,14 @@ const Camera = () => {
         const rtu = {
           id: `rtu-${Date.now()}`,
           number: currentRTUNumber,
-          data: rtuData,
-          image: capturedImage,
+          data: {
+            ...rtuData,
+            // Include user inputs with the AI data
+            condition: userInputs.condition,
+            heatType: userInputs.heatType,
+            gasPipeSize: userInputs.heatType === "Gas" ? userInputs.gasPipeSize : null,
+          },
+          // REMOVED image storage to fix quota error
           capturedAt: new Date().toISOString(),
         };
 
@@ -291,6 +304,12 @@ const Camera = () => {
       setExtractedData(null);
       setError(null);
       setCurrentRTUNumber(currentRTUNumber + 1);
+      // Reset user inputs to defaults
+      setUserInputs({
+        condition: "Good",
+        heatType: "Electric",
+        gasPipeSize: "",
+      });
     }
   };
 
@@ -300,6 +319,9 @@ const Camera = () => {
     }
     navigate(`/?report=${projectId}`);
   };
+
+  // Gas pipe size options
+  const gasPipeSizes = ["3/4\"", "1\"", "1 1/4\"", "1 1/2\""];
 
   if (!projectId) {
     return (
@@ -549,32 +571,108 @@ const Camera = () => {
             />
           </div>
 
-          {!extractedData ? (
-            <div style={{ display: "flex", gap: "15px" }}>
-              <button
-                onClick={() => {
-                  setCapturedImage(null);
-                  setError(null);
-                }}
-                className="btn"
-                style={{
-                  backgroundColor: "#6c757d",
-                  color: "white",
-                  padding: "12px 24px",
-                }}
-              >
-                🔄 Retake
-              </button>
-              <button
-                onClick={uploadAndAnalyze}
-                disabled={analyzing}
-                className="btn btn-success"
-                style={{ flex: 1, padding: "12px 24px" }}
-              >
-                {analyzing ? "Analyzing..." : "🤖 Analyze RTU"}
-              </button>
+          {/* User Input Form - BEFORE analysis */}
+          {!extractedData && (
+            <div className="card" style={{ marginBottom: "20px" }}>
+              <h3 style={{ margin: "0 0 15px 0" }}>Equipment Information:</h3>
+              
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", marginBottom: "5px", fontWeight: "500" }}>
+                  Condition:
+                </label>
+                <select
+                  value={userInputs.condition}
+                  onChange={(e) => setUserInputs({ ...userInputs, condition: e.target.value })}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "4px",
+                    border: "1px solid #ddd",
+                    fontSize: "16px"
+                  }}
+                >
+                  <option value="Good">Good</option>
+                  <option value="Fair">Fair</option>
+                  <option value="Poor">Poor</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", marginBottom: "5px", fontWeight: "500" }}>
+                  Heat Type:
+                </label>
+                <select
+                  value={userInputs.heatType}
+                  onChange={(e) => setUserInputs({ ...userInputs, heatType: e.target.value })}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "4px",
+                    border: "1px solid #ddd",
+                    fontSize: "16px"
+                  }}
+                >
+                  <option value="Electric">Electric</option>
+                  <option value="Gas">Gas</option>
+                </select>
+              </div>
+
+              {userInputs.heatType === "Gas" && (
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={{ display: "block", marginBottom: "5px", fontWeight: "500" }}>
+                    Gas Pipe Size:
+                  </label>
+                  <select
+                    value={userInputs.gasPipeSize}
+                    onChange={(e) => setUserInputs({ ...userInputs, gasPipeSize: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: "4px",
+                      border: "1px solid #ddd",
+                      fontSize: "16px"
+                    }}
+                  >
+                    <option value="">Select pipe size...</option>
+                    {gasPipeSizes.map(size => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: "15px", marginTop: "20px" }}>
+                <button
+                  onClick={() => {
+                    setCapturedImage(null);
+                    setError(null);
+                  }}
+                  className="btn"
+                  style={{
+                    backgroundColor: "#6c757d",
+                    color: "white",
+                    padding: "12px 24px",
+                  }}
+                >
+                  🔄 Retake
+                </button>
+                <button
+                  onClick={uploadAndAnalyze}
+                  disabled={analyzing || (userInputs.heatType === "Gas" && !userInputs.gasPipeSize)}
+                  className="btn btn-success"
+                  style={{ 
+                    flex: 1, 
+                    padding: "12px 24px",
+                    opacity: (analyzing || (userInputs.heatType === "Gas" && !userInputs.gasPipeSize)) ? 0.6 : 1
+                  }}
+                >
+                  {analyzing ? "Analyzing..." : "🤖 Analyze Nameplate"}
+                </button>
+              </div>
             </div>
-          ) : (
+          )}
+
+          {extractedData && (
             <div>
               <div
                 className="card"
@@ -584,43 +682,125 @@ const Camera = () => {
                   ✅ RTU #{currentRTUNumber} Analysis Complete
                 </h3>
                 <div className="card" style={{ backgroundColor: "white" }}>
-                  {extractedData.manufacturer && (
-                    <p>
-                      <strong>Manufacturer:</strong>{" "}
-                      {extractedData.manufacturer}
-                    </p>
+                  <h4 style={{ margin: "0 0 15px 0", color: "#333" }}>User Inputs:</h4>
+                  <p><strong>Condition:</strong> {userInputs.condition}</p>
+                  <p><strong>Heat Type:</strong> {userInputs.heatType}</p>
+                  {userInputs.heatType === "Gas" && userInputs.gasPipeSize && (
+                    <p><strong>Gas Pipe Size:</strong> {userInputs.gasPipeSize}</p>
                   )}
-                  {extractedData.model && (
-                    <p>
-                      <strong>Model:</strong> {extractedData.model}
-                    </p>
+                  
+                  <hr style={{ margin: "20px 0" }} />
+                  
+                  <h4 style={{ margin: "0 0 15px 0", color: "#333" }}>AI Extracted Data:</h4>
+                  
+                  {/* Basic Info Section */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <h5 style={{ color: "#666", margin: "10px 0" }}>Basic Information:</h5>
+                    <p><strong>Manufacturer:</strong> {extractedData.basicInfo?.manufacturer || "Not Available"}</p>
+                    <p><strong>Model:</strong> {extractedData.basicInfo?.model || "Not Available"}</p>
+                    <p><strong>Serial Number:</strong> {extractedData.basicInfo?.serialNumber || "Not Available"}</p>
+                    <p><strong>Manufacturing Year:</strong> {extractedData.basicInfo?.manufacturingYear || "Not Available"}</p>
+                    <p><strong>Current Age:</strong> {extractedData.basicInfo?.currentAge ? `${extractedData.basicInfo.currentAge} years` : "Not Available"}</p>
+                  </div>
+
+                  {/* Electrical Info */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <h5 style={{ color: "#666", margin: "10px 0" }}>Electrical Information:</h5>
+                    <p><strong>Voltage:</strong> {extractedData.electrical?.voltage || "Not Available"}</p>
+                    <p><strong>Phase:</strong> {extractedData.electrical?.phase || "Not Available"}</p>
+                    <p><strong>Disconnect Size:</strong> {extractedData.electrical?.disconnectSize || "Not Available"}</p>
+                    <p><strong>Fuse Size:</strong> {extractedData.electrical?.fuseSize || "Not Available"}</p>
+                    <p><strong>KW:</strong> {extractedData.electrical?.kw || "Not Available"}</p>
+                  </div>
+
+                  {/* Compressor Info */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <h5 style={{ color: "#666", margin: "10px 0" }}>Compressor 1:</h5>
+                    <p><strong>Quantity:</strong> {extractedData.compressor1?.quantity || "Not Available"}</p>
+                    <p><strong>RLA:</strong> {extractedData.compressor1?.rla || "Not Available"}</p>
+                    <p><strong>LRA:</strong> {extractedData.compressor1?.lra || "Not Available"}</p>
+                    <p><strong>MCA:</strong> {extractedData.compressor1?.mca || "Not Available"}</p>
+                  </div>
+
+                  {/* Compressor 2 Info */}
+                  {extractedData.compressor2 && (
+                    <div style={{ marginBottom: "20px" }}>
+                      <h5 style={{ color: "#666", margin: "10px 0" }}>Compressor 2:</h5>
+                      <p><strong>Quantity:</strong> {extractedData.compressor2?.quantity || "Not Available"}</p>
+                      <p><strong>RLA:</strong> {extractedData.compressor2?.rla || "Not Available"}</p>
+                      <p><strong>LRA:</strong> {extractedData.compressor2?.lra || "Not Available"}</p>
+                      <p><strong>MOCP:</strong> {extractedData.compressor2?.mocp || "Not Available"}</p>
+                    </div>
                   )}
-                  {extractedData.tonnage && (
-                    <p>
-                      <strong>Capacity:</strong> {extractedData.tonnage}
+
+                  {/* Condenser Fan Motor */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <h5 style={{ color: "#666", margin: "10px 0" }}>Condenser Fan Motor:</h5>
+                    <p><strong>Quantity:</strong> {extractedData.condenserFanMotor?.quantity || "Not Available"}</p>
+                    <p><strong>HP:</strong> {extractedData.condenserFanMotor?.hp || "Not Available"}</p>
+                    <p><strong>FLA:</strong> {extractedData.condenserFanMotor?.fla || "Not Available"}</p>
+                  </div>
+
+                  {/* Indoor Fan Motor */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <h5 style={{ color: "#666", margin: "10px 0" }}>Indoor Fan Motor:</h5>
+                    <p><strong>Quantity:</strong> {extractedData.indoorFanMotor?.quantity || "Not Available"}</p>
+                    <p><strong>HP:</strong> {extractedData.indoorFanMotor?.hp || "Not Available"}</p>
+                    <p><strong>FLA:</strong> {extractedData.indoorFanMotor?.fla || "Not Available"}</p>
+                  </div>
+
+                  {/* Gas Information */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <h5 style={{ color: "#666", margin: "10px 0" }}>Gas Information:</h5>
+                    <p><strong>Gas Type:</strong> {extractedData.gasInformation?.gasType || "Not Available"}</p>
+                    <p><strong>Input Min BTU:</strong> {extractedData.gasInformation?.inputMinBTU || "Not Available"}</p>
+                    <p><strong>Input Max BTU:</strong> {extractedData.gasInformation?.inputMaxBTU || "Not Available"}</p>
+                    <p><strong>Output Capacity BTU:</strong> {extractedData.gasInformation?.outputCapacityBTU || "Not Available"}</p>
+                  </div>
+
+                  {/* Cooling Info */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <h5 style={{ color: "#666", margin: "10px 0" }}>Cooling Information:</h5>
+                    <p><strong>Tonnage:</strong> {extractedData.cooling?.tonnage || "Not Available"}</p>
+                    <p><strong>Refrigerant:</strong> {extractedData.cooling?.refrigerant || "Not Available"}</p>
+                  </div>
+
+                  {/* Service Life Assessment */}
+                  <div style={{
+                    padding: "15px",
+                    borderRadius: "4px",
+                    backgroundColor: extractedData.basicInfo?.currentAge > 15 ? "#f8d7da" : "#d1ecf1",
+                    marginTop: "20px"
+                  }}>
+                    <h5 style={{ margin: "0 0 10px 0" }}>Service Life Assessment:</h5>
+                    <p style={{ margin: "5px 0" }}><strong>Status:</strong> {extractedData.serviceLife?.assessment || "Unable to determine"}</p>
+                    <p style={{ margin: "5px 0" }}><strong>Recommendation:</strong> {extractedData.serviceLife?.recommendation || "Further evaluation needed"}</p>
+                    <p style={{ margin: "5px 0", fontSize: "14px", fontStyle: "italic" }}>
+                      {extractedData.serviceLife?.ashrae_standard || "ASHRAE median service life for RTU: 15 years"}
                     </p>
+                  </div>
+
+                  {/* Warnings */}
+                  {extractedData.warnings && extractedData.warnings.length > 0 && (
+                    <div style={{
+                      padding: "15px",
+                      borderRadius: "4px",
+                      backgroundColor: "#fff3cd",
+                      marginTop: "20px"
+                    }}>
+                      <h5 style={{ margin: "0 0 10px 0", color: "#856404" }}>⚠️ Warnings:</h5>
+                      <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                        {extractedData.warnings.map((warning, index) => (
+                          <li key={index} style={{ color: "#856404" }}>{warning}</li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
-                  {extractedData.manufacturingYear && (
-                    <p>
-                      <strong>Year:</strong> {extractedData.manufacturingYear}
-                    </p>
-                  )}
-                  {extractedData.currentAge !== undefined && (
-                    <div
-                      style={{
-                        padding: "10px",
-                        borderRadius: "4px",
-                        backgroundColor:
-                          extractedData.currentAge > 15 ? "#f8d7da" : "#d1ecf1",
-                      }}
-                    >
-                      <p>
-                        <strong>Age:</strong> {extractedData.currentAge} years
-                      </p>
-                      <p>
-                        <strong>Status:</strong>{" "}
-                        {extractedData.serviceLifeAssessment}
-                      </p>
+                  
+                  {/* AI Confidence Level */}
+                  {extractedData.overallConfidence && (
+                    <div style={{ marginTop: "20px", textAlign: "right", fontSize: "14px", color: "#666" }}>
+                      <strong>AI Confidence:</strong> {extractedData.overallConfidence}
                     </div>
                   )}
                 </div>
@@ -644,32 +824,3 @@ const Camera = () => {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* RTU Summary */}
-      {projectRTUs.length > 0 && (
-        <div className="card" style={{ marginTop: "30px" }}>
-          <h3>Captured RTUs ({projectRTUs.length})</h3>
-          {projectRTUs.map((rtu, index) => (
-            <div
-              key={rtu.id}
-              style={{
-                padding: "15px",
-                backgroundColor: "#f8f9fa",
-                borderRadius: "8px",
-                marginTop: "10px",
-              }}
-            >
-              <strong>RTU #{rtu.number}:</strong> {rtu.data.manufacturer}{" "}
-              {rtu.data.model} - {rtu.data.tonnage} (
-              {rtu.data.manufacturingYear})
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default Camera;
