@@ -1,17 +1,30 @@
-// frontend/src/components/ReportGenerator.js - Enhanced for Live Preview
-import React from "react";
+// frontend/src/components/ReportGenerator.js - Enhanced for Live Preview with Editing
+import React, { useState, useEffect } from "react";
 
-const ReportGenerator = ({ project, squareFootage, isLivePreview = false }) => {
-  if (!project || !project.rtus || project.rtus.length === 0) {
-    return (
-      <div className="card" style={{ padding: "40px", textAlign: "center" }}>
-        <h3>No RTUs to Report</h3>
-        <p>Capture RTU nameplates to generate the report.</p>
-      </div>
-    );
-  }
+const ReportGenerator = ({ project, squareFootage, isLivePreview = false, currentExtractedData = null, currentRTUNumber = null, currentUserInputs = null }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedReport, setEditedReport] = useState("");
 
-  const rtus = project.rtus;
+  // Early return must come after all hooks to comply with Rules of Hooks
+  const savedRTUs = project?.rtus || [];
+
+  // If we have current extracted data, create a temporary RTU object and add it to the list
+  const rtus = currentExtractedData
+    ? [
+        ...savedRTUs,
+        {
+          id: `temp-${currentRTUNumber}`,
+          number: currentRTUNumber,
+          data: {
+            ...currentExtractedData,
+            condition: currentUserInputs?.condition || "Good",
+            heatType: currentUserInputs?.heatType || "Electric",
+            gasPipeSize: currentUserInputs?.heatType === "Gas" ? currentUserInputs?.gasPipeSize : null,
+          }
+        }
+      ]
+    : savedRTUs;
+
   const rtuCount = rtus.length;
 
   // Helper to safely extract data from nested structure
@@ -34,6 +47,8 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false }) => {
         data.serviceLife?.assessment || data.serviceLifeAssessment || "",
       recommendation:
         data.serviceLife?.recommendation || data.recommendation || "",
+      heatType: data.heatType || "Unknown",
+      gasPipeSize: data.gasPipeSize || null,
     };
   };
 
@@ -88,7 +103,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false }) => {
     return rtuData.age && rtuData.age > 15;
   });
 
-  // Generate RTU descriptions
+  // Generate RTU descriptions with heat type and gas pipe size
   const generateRTUDescriptions = () => {
     const ordinals = [
       "first",
@@ -108,10 +123,29 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false }) => {
         const tonnage = rtuData.tonnage;
         const manufacturer = rtuData.manufacturer;
         const year = rtuData.year;
+        const heatType = rtuData.heatType;
+        const gasPipeSize = rtuData.gasPipeSize;
 
-        return `The ${ordinal} unit is ${
+        // Build description with proper formatting for illegible data
+        let description = `The ${ordinal} unit is ${
           tonnage.match(/\d/) ? "an" : "a"
-        } ${tonnage} model manufactured by ${manufacturer} in ${year}.`;
+        } ${tonnage} ${heatType === "Electric" ? "electric" : "gas-fired"} model manufactured by ${manufacturer}`;
+
+        // Only add year if it's legible and not "Unknown" or "Not Available"
+        if (year && year !== "Unknown" && year !== "Not legible" && year !== "Not Available") {
+          description += ` in ${year}`;
+        } else if (year === "Not legible") {
+          description += ` (manufacturing year not legible on nameplate)`;
+        }
+
+        // Add gas pipe size if it's a gas unit and we have the size
+        if (heatType === "Gas" && gasPipeSize) {
+          description += ` with a ${gasPipeSize} gas line`;
+        }
+
+        description += ".";
+
+        return description;
       })
       .join(" ");
   };
@@ -138,17 +172,58 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false }) => {
     }
   };
 
-  const mechanicalSystemsReport = `The proposed space is served by ${numberToWord(
-    rtuCount
-  )} single packaged gas-fired roof top unit${
-    rtuCount > 1 ? "s" : ""
-  }. ${generateRTUDescriptions()} ${generateReplacementText()}${
+  // Count gas units and electric units separately
+  const gasUnitsCount = rtus.filter(rtu => {
+    const rtuData = extractRTUData(rtu);
+    return rtuData.heatType === "Gas";
+  }).length;
+
+  const electricUnitsCount = rtus.filter(rtu => {
+    const rtuData = extractRTUData(rtu);
+    return rtuData.heatType === "Electric";
+  }).length;
+
+  // Generate opening sentence based on unit types
+  const generateOpeningSentence = () => {
+    if (gasUnitsCount > 0 && electricUnitsCount > 0) {
+      // Mixed units
+      return `The proposed space is served by ${numberToWord(gasUnitsCount)} single packaged gas-fired roof top unit${gasUnitsCount > 1 ? "s" : ""} and ${numberToWord(electricUnitsCount)} electric roof top unit${electricUnitsCount > 1 ? "s" : ""}.`;
+    } else if (gasUnitsCount > 0) {
+      // All gas units
+      return `The proposed space is served by ${numberToWord(gasUnitsCount)} single packaged gas-fired roof top unit${gasUnitsCount > 1 ? "s" : ""}.`;
+    } else if (electricUnitsCount > 0) {
+      // All electric units
+      return `The proposed space is served by ${numberToWord(electricUnitsCount)} single packaged electric roof top unit${electricUnitsCount > 1 ? "s" : ""}.`;
+    } else {
+      // Unknown type (fallback)
+      return `The proposed space is served by ${numberToWord(rtuCount)} single packaged roof top unit${rtuCount > 1 ? "s" : ""}.`;
+    }
+  };
+
+  const mechanicalSystemsReport = `${generateOpeningSentence()} ${generateRTUDescriptions()} ${generateReplacementText()}${
     squareFootage
       ? ` With the proposed space being approximately ${parseFloat(
           squareFootage
         ).toLocaleString()}sq.ft., Schnackel Engineers estimates ${coolingEstimate}-tons of cooling will be required, however complete heat gain/loss calculations will be performed to determine the exact amount of cooling required.`
       : ""
   } The majority of ductwork in the space is interior insulated rectangular sheet metal ductwork with insulated flexible diffuser connections.`;
+
+  // Update edited report when mechanicalSystemsReport changes
+  useEffect(() => {
+    if (!isEditing) {
+      setEditedReport(mechanicalSystemsReport);
+    }
+  }, [mechanicalSystemsReport, isEditing]);
+
+  // Early return after all hooks to comply with Rules of Hooks
+  if (!project || (rtus.length === 0 && !currentExtractedData)) {
+    return (
+      <div className="card" style={{ padding: "40px", textAlign: "center" }}>
+        <h3>No RTUs to Report</h3>
+        <p>Capture RTU nameplates to generate the report.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="card" style={{ maxWidth: "900px", margin: "0 auto" }}>
@@ -259,27 +334,72 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false }) => {
         )}
       </div>
 
-      {/* Mechanical Systems - THE MAIN CONTENT */}
+      {/* Mechanical Systems - THE MAIN CONTENT WITH EDITING */}
       <div style={{ marginBottom: "30px" }}>
-        <h3
-          style={{
-            fontSize: "16px",
-            fontWeight: "bold",
-            marginBottom: "15px",
-            textDecoration: "underline",
-          }}
-        >
-          Mechanical Systems:
-        </h3>
-        <p
-          style={{
-            textAlign: "justify",
-            lineHeight: "1.6",
-            fontSize: "14px",
-          }}
-        >
-          {mechanicalSystemsReport}
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+          <h3
+            style={{
+              fontSize: "16px",
+              fontWeight: "bold",
+              margin: 0,
+              textDecoration: "underline",
+            }}
+          >
+            Mechanical Systems:
+          </h3>
+          {isLivePreview && (
+            <button
+              onClick={() => {
+                if (isEditing) {
+                  // Save edit
+                  setIsEditing(false);
+                } else {
+                  // Start editing
+                  setIsEditing(true);
+                }
+              }}
+              className="btn"
+              style={{
+                padding: "5px 15px",
+                fontSize: "12px",
+                backgroundColor: isEditing ? "#28a745" : "#007bff",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer"
+              }}
+            >
+              {isEditing ? "✓ Save" : "✏️ Edit"}
+            </button>
+          )}
+        </div>
+        {isEditing ? (
+          <textarea
+            value={editedReport}
+            onChange={(e) => setEditedReport(e.target.value)}
+            style={{
+              width: "100%",
+              minHeight: "150px",
+              padding: "10px",
+              fontSize: "14px",
+              lineHeight: "1.6",
+              border: "2px solid #007bff",
+              borderRadius: "4px",
+              fontFamily: "inherit",
+              resize: "vertical"
+            }}
+          />
+        ) : (
+          <p
+            style={{
+              textAlign: "justify",
+              lineHeight: "1.6",
+              fontSize: "14px",
+            }}
+          >
+            {editedReport}
+          </p>
+        )}
       </div>
 
       {/* RTU Summary Table */}

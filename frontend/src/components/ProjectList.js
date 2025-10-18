@@ -1,335 +1,571 @@
-// backend/lambda/quickAnalysis.js - COMPREHENSIVE VERSION WITH NOT LEGIBLE HANDLING
-const AWS = require("aws-sdk");
-const bedrock = new AWS.BedrockRuntime({ region: "us-east-1" });
+// frontend/src/components/ProjectList.js - Fixed React Component
+import React, { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import ReportGenerator from "./ReportGenerator";
+import AddressAutocomplete from "./AddressAutocomplete";
 
-exports.handler = async (event) => {
-  console.log("=== LAMBDA STARTED ===");
+const ProjectList = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const reportProjectId = searchParams.get("report");
 
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "OPTIONS,POST",
-    "Content-Type": "application/json",
+  const [projects, setProjects] = useState([]);
+  const [showNewProjectForm, setShowNewProjectForm] = useState(false);
+  const [showReportFor, setShowReportFor] = useState(null);
+
+  const [newProject, setNewProject] = useState({
+    name: "",
+    projectNumber: "",
+    address: "",
+    clientName: "",
+    squareFootage: "",
+    surveyDate: new Date().toISOString().split("T")[0],
+    surveyorName: "",
+    spaceDescription: "",
+  });
+
+  useEffect(() => {
+    loadProjects();
+    if (reportProjectId) {
+      const project = projects.find((p) => p.id === reportProjectId);
+      if (project) {
+        setShowReportFor(project);
+      }
+    }
+  }, [reportProjectId]);
+
+  const loadProjects = () => {
+    const savedProjects = localStorage.getItem("mep-survey-projects");
+    if (savedProjects) {
+      const parsed = JSON.parse(savedProjects);
+      setProjects(
+        parsed.sort(
+          (a, b) =>
+            new Date(b.lastModified || b.createdAt) -
+            new Date(a.lastModified || a.createdAt)
+        )
+      );
+    }
   };
 
-  if (event.httpMethod === "OPTIONS") {
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ message: "CORS OK" }),
-    };
-  }
-
-  try {
-    let body = JSON.parse(event.body);
-    const { imageBase64, equipmentType } = body;
-
-    // COMPREHENSIVE PROMPT FOR HVAC EQUIPMENT WITH NOT LEGIBLE HANDLING
-    const comprehensivePrompt = `You are an expert MEP engineer analyzing an HVAC equipment nameplate. Extract ALL visible information and return it in the exact JSON format below.
-
-CRITICAL INSTRUCTIONS:
-1. Extract EVERY field you can see on the nameplate
-2. If text is worn, faded, or illegible, return "Not Legible" for that field
-3. If a field/label is not present on the nameplate at all, return "Not Available"
-4. If you can see a label (like "COMPRESSOR") but the values are worn off, return "Not Legible"
-5. For Lennox serial numbers (format YYWWXXXXXX): YY = year, WW = week
-   - Decode the year: if YY = 56, that's 2006; if YY = 08, that's 2008; if YY = 17, that's 2017
-   - Calculate age: 2025 - manufacturing year
-6. Return confidence level for each major section based on legibility
-7. Add warnings for any illegible critical fields
-
-RETURN THIS EXACT JSON STRUCTURE (ALL FIELDS MUST BE INCLUDED):
-{
-  "systemType": {
-    "category": "Packaged Roof Top Unit" or "Split System" or "Other" or "Not Available",
-    "configuration": "Electric Cooling / Gas Heat" or "Electric Cooling / Electric Heat" or "Electric Cooling / Heat Pump" or "Electric Cooling / No Heat" or "Not Available",
-    "confidence": "high" or "medium" or "low"
-  },
-  "basicInfo": {
-    "manufacturer": "string or 'Not Legible' or 'Not Available'",
-    "model": "string or 'Not Legible' or 'Not Available'",
-    "serialNumber": "string or 'Not Legible' or 'Not Available'",
-    "manufacturingYear": number or null,
-    "currentAge": number or null,
-    "condition": "Good" or "Fair" or "Poor" (based on nameplate legibility),
-    "confidence": "high" or "medium" or "low"
-  },
-  "electrical": {
-    "disconnectSize": "string or 'Not Legible' or 'Not Available'",
-    "fuseSize": "string or 'Not Legible' or 'Not Available'",
-    "voltage": "string or 'Not Legible' or 'Not Available'",
-    "phase": "1" or "3" or "Not Legible" or "Not Available",
-    "kw": "string or 'Not Legible' or 'Not Available'",
-    "confidence": "high" or "medium" or "low"
-  },
-  "compressor1": {
-    "quantity": number or "Not Legible" or "Not Available",
-    "volts": "string or 'Not Legible' or 'Not Available'",
-    "phase": "1" or "3" or "Not Legible" or "Not Available",
-    "rla": "string or 'Not Legible' or 'Not Available'",
-    "lra": "string or 'Not Legible' or 'Not Available'",
-    "mca": "string or 'Not Legible' or 'Not Available'",
-    "confidence": "high" or "medium" or "low"
-  },
-  "compressor2": {
-    "quantity": number or "Not Legible" or "Not Available",
-    "volts": "string or 'Not Legible' or 'Not Available'",
-    "phase": "1" or "3" or "Not Legible" or "Not Available",
-    "rla": "string or 'Not Legible' or 'Not Available'",
-    "lra": "string or 'Not Legible' or 'Not Available'",
-    "mocp": "string or 'Not Legible' or 'Not Available'",
-    "confidence": "high" or "medium" or "low"
-  },
-  "condenserFanMotor": {
-    "quantity": number or "Not Legible" or "Not Available",
-    "volts": "string or 'Not Legible' or 'Not Available'",
-    "phase": "1" or "3" or "Not Legible" or "Not Available",
-    "fla": "string or 'Not Legible' or 'Not Available'",
-    "hp": "string or 'Not Legible' or 'Not Available'",
-    "confidence": "high" or "medium" or "low"
-  },
-  "indoorFanMotor": {
-    "quantity": number or "Not Legible" or "Not Available",
-    "volts": "string or 'Not Legible' or 'Not Available'",
-    "phase": "1" or "3" or "Not Legible" or "Not Available",
-    "fla": "string or 'Not Legible' or 'Not Available'",
-    "hp": "string or 'Not Legible' or 'Not Available'",
-    "confidence": "high" or "medium" or "low"
-  },
-  "gasInformation": {
-    "gasType": "Natural Gas" or "Propane" or "Not Legible" or "Not Available",
-    "inputMinBTU": "string or 'Not Legible' or 'Not Available'",
-    "inputMaxBTU": "string or 'Not Legible' or 'Not Available'",
-    "outputCapacityBTU": "string or 'Not Legible' or 'Not Available'",
-    "gasPipeSize": "string or 'Not Legible' or 'Not Available'",
-    "confidence": "high" or "medium" or "low"
-  },
-  "cooling": {
-    "tonnage": "string or 'Not Legible' or 'Not Available' (calculate from model if possible)",
-    "refrigerant": "string or 'Not Legible' or 'Not Available'",
-    "confidence": "high" or "medium" or "low"
-  },
-  "serviceLife": {
-    "assessment": "Within service life (0-15 years)" or "BEYOND SERVICE LIFE (15+ years)" or "Unable to determine",
-    "recommendation": "Reuse" or "Replace" or "Further evaluation needed",
-    "ashrae_standard": "ASHRAE median service life for RTU: 15 years"
-  },
-  "warnings": [
-    "list any safety concerns, illegible critical fields, or issues"
-  ],
-  "overallConfidence": "high" or "medium" or "low"
-}
-
-IMPORTANT EXAMPLES:
-- If you see "COMPRESSOR" label but the RLA/LRA values are worn: return "Not Legible" for those values
-- If the entire electrical section is missing from nameplate: return "Not Available" for all electrical fields
-- If manufacturer name is partially visible like "LEN___": still try to identify as "Lennox" if reasonable
-- Add warnings like: "Compressor values not legible - manual inspection required"
-
-Extract all visible information now, using "Not Legible" for worn/faded text and "Not Available" for missing fields.`;
-
-    console.log("Calling Claude with comprehensive prompt...");
-
-    const content = [];
-
-    if (imageBase64 === "test") {
-      content.push({
-        type: "text",
-        text: "This is a test. Respond with 'Lambda is working!'",
-      });
-    } else {
-      content.push({
-        type: "text",
-        text: comprehensivePrompt,
-      });
-      content.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: "image/jpeg",
-          data: imageBase64,
-        },
-      });
+  const createProject = () => {
+    if (!newProject.name || !newProject.projectNumber) {
+      alert("Please fill in Project Name and Project Number");
+      return;
     }
 
-    const response = await bedrock
-      .invokeModel({
-        modelId: "anthropic.claude-3-haiku-20240307-v1:0",
-        contentType: "application/json",
-        accept: "application/json",
-        body: JSON.stringify({
-          anthropic_version: "bedrock-2023-05-31",
-          max_tokens: 3000, // INCREASED for comprehensive response
-          temperature: 0.1,
-          messages: [
-            {
-              role: "user",
-              content: content,
-            },
-          ],
-        }),
-      })
-      .promise();
+    const project = {
+      id: `project-${Date.now()}`,
+      ...newProject,
+      rtus: [],
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+    };
 
-    const result = JSON.parse(new TextDecoder().decode(response.body));
-    console.log("✓ Bedrock responded");
+    const savedProjects = localStorage.getItem("mep-survey-projects");
+    const existingProjects = savedProjects ? JSON.parse(savedProjects) : [];
+    existingProjects.push(project);
+    localStorage.setItem(
+      "mep-survey-projects",
+      JSON.stringify(existingProjects)
+    );
 
-    let parsedData;
-    try {
-      // Extract JSON from Claude's response
-      const textContent = result.content?.[0]?.text || "{}";
+    setProjects(existingProjects);
+    setShowNewProjectForm(false);
+    setNewProject({
+      name: "",
+      projectNumber: "",
+      address: "",
+      clientName: "",
+      squareFootage: "",
+      surveyDate: new Date().toISOString().split("T")[0],
+      surveyorName: "",
+      spaceDescription: "",
+    });
 
-      // Try to extract JSON from the response if it's wrapped in other text
-      const jsonMatch = textContent.match(/\{[\s\S]*\}/);
-      const jsonText = jsonMatch ? jsonMatch[0] : textContent;
+    navigate(`/camera/${project.id}`);
+  };
 
-      parsedData = JSON.parse(jsonText);
-
-      // Ensure all required fields exist even if Claude missed some
-      parsedData = ensureAllFields(parsedData);
-    } catch (e) {
-      console.log("JSON parse error, returning structured error:", e);
-      parsedData = getDefaultStructure();
-      parsedData.warnings = [
-        "Could not parse AI response - manual inspection required",
-      ];
-      parsedData.overallConfidence = "low";
+  const deleteProject = (projectId) => {
+    if (window.confirm("Delete this project? This cannot be undone.")) {
+      const savedProjects = localStorage.getItem("mep-survey-projects");
+      if (savedProjects) {
+        const existingProjects = JSON.parse(savedProjects);
+        const filtered = existingProjects.filter((p) => p.id !== projectId);
+        localStorage.setItem("mep-survey-projects", JSON.stringify(filtered));
+        setProjects(filtered);
+      }
     }
+  };
 
-    return {
-      statusCode: 200,
-      headers: headers,
-      body: JSON.stringify({
-        success: true,
-        message: "Complete analysis finished",
-        data: parsedData,
-        timestamp: new Date().toISOString(),
-      }),
-    };
-  } catch (error) {
-    console.error("❌ Lambda error:", error);
-    return {
-      statusCode: 500,
-      headers: headers,
-      body: JSON.stringify({
-        success: false,
-        error: error.message,
-        timestamp: new Date().toISOString(),
-      }),
-    };
+  const continueProject = (projectId) => {
+    navigate(`/camera/${projectId}`);
+  };
+
+  const viewReport = (project) => {
+    setShowReportFor(project);
+  };
+
+  if (showReportFor) {
+    return (
+      <div className="container">
+        <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
+          <button
+            onClick={() => setShowReportFor(null)}
+            className="btn"
+            style={{
+              backgroundColor: "#6c757d",
+              color: "white",
+            }}
+          >
+            ← Back to Projects
+          </button>
+          <button
+            onClick={() => continueProject(showReportFor.id)}
+            className="btn btn-primary"
+          >
+            ➕ Add More RTUs
+          </button>
+        </div>
+        <ReportGenerator
+          project={showReportFor}
+          squareFootage={showReportFor.squareFootage}
+          isLivePreview={true}
+        />
+      </div>
+    );
   }
+
+  return (
+    <div className="container">
+      <div className="card" style={{ marginBottom: "20px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <h1 style={{ margin: "0 0 5px 0" }}>MEP Survey Projects</h1>
+            <p style={{ margin: 0, color: "#666" }}>
+              {projects.length} project{projects.length !== 1 ? "s" : ""} •{" "}
+              {projects.reduce((sum, p) => sum + (p.rtus?.length || 0), 0)} RTUs
+              captured
+            </p>
+          </div>
+          <button
+            onClick={() => setShowNewProjectForm(true)}
+            className="btn btn-primary"
+            style={{ padding: "12px 24px" }}
+          >
+            ➕ New Project
+          </button>
+        </div>
+      </div>
+
+      {showNewProjectForm && (
+        <div
+          className="card"
+          style={{
+            marginBottom: "20px",
+            backgroundColor: "#f8f9fa",
+            border: "2px solid #007bff",
+          }}
+        >
+          <h2 style={{ marginTop: 0 }}>Create New Project</h2>
+
+          <div style={{ marginBottom: "15px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontWeight: "500",
+              }}
+            >
+              Project Name: *
+            </label>
+            <input
+              type="text"
+              value={newProject.name}
+              onChange={(e) =>
+                setNewProject({ ...newProject, name: e.target.value })
+              }
+              placeholder="e.g., Downtown Office Building"
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ddd",
+                fontSize: "16px",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "15px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontWeight: "500",
+              }}
+            >
+              Project Number: *
+            </label>
+            <input
+              type="text"
+              value={newProject.projectNumber}
+              onChange={(e) =>
+                setNewProject({ ...newProject, projectNumber: e.target.value })
+              }
+              placeholder="e.g., 220688"
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ddd",
+                fontSize: "16px",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "15px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontWeight: "500",
+              }}
+            >
+              Address:
+            </label>
+            <AddressAutocomplete
+              value={newProject.address}
+              onChange={(value) =>
+                setNewProject({ ...newProject, address: value })
+              }
+              placeholder="123 Main Street, Miami, FL"
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ddd",
+                fontSize: "16px",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "15px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontWeight: "500",
+              }}
+            >
+              Client Name:
+            </label>
+            <input
+              type="text"
+              value={newProject.clientName}
+              onChange={(e) =>
+                setNewProject({ ...newProject, clientName: e.target.value })
+              }
+              placeholder="Client Name"
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ddd",
+                fontSize: "16px",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "15px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontWeight: "500",
+              }}
+            >
+              Square Footage:
+            </label>
+            <input
+              type="number"
+              value={newProject.squareFootage}
+              onChange={(e) =>
+                setNewProject({ ...newProject, squareFootage: e.target.value })
+              }
+              placeholder="e.g., 5000"
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ddd",
+                fontSize: "16px",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "15px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontWeight: "500",
+              }}
+            >
+              Survey Date:
+            </label>
+            <input
+              type="date"
+              value={newProject.surveyDate}
+              onChange={(e) =>
+                setNewProject({ ...newProject, surveyDate: e.target.value })
+              }
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ddd",
+                fontSize: "16px",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "15px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontWeight: "500",
+              }}
+            >
+              Surveyor Name:
+            </label>
+            <input
+              type="text"
+              value={newProject.surveyorName}
+              onChange={(e) =>
+                setNewProject({ ...newProject, surveyorName: e.target.value })
+              }
+              placeholder="Your Name"
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ddd",
+                fontSize: "16px",
+              }}
+            />
+          </div>
+
+          <div style={{ marginBottom: "15px" }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "5px",
+                fontWeight: "500",
+              }}
+            >
+              Space Description:
+            </label>
+            <select
+              value={newProject.spaceDescription}
+              onChange={(e) =>
+                setNewProject({
+                  ...newProject,
+                  spaceDescription: e.target.value,
+                })
+              }
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #ddd",
+                fontSize: "16px",
+              }}
+            >
+              <option value="">Select space type...</option>
+              <option value="Single vacant space">Single vacant space</option>
+              <option value="Multiple vacant spaces">
+                Multiple vacant spaces
+              </option>
+              <option value="Single occupied space">
+                Single occupied space
+              </option>
+              <option value="Multiple occupied spaces">
+                Multiple occupied spaces
+              </option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", gap: "15px", marginTop: "20px" }}>
+            <button
+              onClick={() => {
+                setShowNewProjectForm(false);
+                setNewProject({
+                  name: "",
+                  projectNumber: "",
+                  address: "",
+                  clientName: "",
+                  squareFootage: "",
+                  surveyDate: new Date().toISOString().split("T")[0],
+                  surveyorName: "",
+                  spaceDescription: "",
+                });
+              }}
+              className="btn"
+              style={{
+                backgroundColor: "#6c757d",
+                color: "white",
+                padding: "12px 24px",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={createProject}
+              className="btn btn-success"
+              style={{ flex: 1, padding: "12px 24px" }}
+            >
+              Create Project & Start Survey
+            </button>
+          </div>
+        </div>
+      )}
+
+      {projects.length === 0 && !showNewProjectForm && (
+        <div
+          className="card"
+          style={{ textAlign: "center", padding: "60px 20px" }}
+        >
+          <h2 style={{ color: "#666" }}>No Projects Yet</h2>
+          <p style={{ color: "#999", marginBottom: "30px" }}>
+            Create your first MEP survey project to get started
+          </p>
+          <button
+            onClick={() => setShowNewProjectForm(true)}
+            className="btn btn-primary"
+            style={{ padding: "15px 30px", fontSize: "18px" }}
+          >
+            ➕ Create First Project
+          </button>
+        </div>
+      )}
+
+      <div className="grid grid-2">
+        {projects.map((project) => (
+          <div
+            key={project.id}
+            className="card"
+            style={{
+              border: "1px solid #ddd",
+              transition: "box-shadow 0.3s",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                marginBottom: "15px",
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <h3 style={{ margin: "0 0 5px 0", color: "#007bff" }}>
+                  {project.name}
+                </h3>
+                <p style={{ margin: "0", color: "#666", fontSize: "14px" }}>
+                  Project #{project.projectNumber}
+                </p>
+              </div>
+              <div
+                style={{
+                  backgroundColor:
+                    project.rtus?.length > 0 ? "#28a745" : "#ffc107",
+                  color: "white",
+                  padding: "8px 12px",
+                  borderRadius: "20px",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                }}
+              >
+                {project.rtus?.length || 0} RTUs
+              </div>
+            </div>
+
+            {project.address && (
+              <p style={{ margin: "10px 0", fontSize: "14px", color: "#666" }}>
+                📍 {project.address}
+              </p>
+            )}
+
+            {project.squareFootage && (
+              <p style={{ margin: "10px 0", fontSize: "14px", color: "#666" }}>
+                📐 {parseFloat(project.squareFootage).toLocaleString()} sq.ft.
+              </p>
+            )}
+
+            <p style={{ margin: "10px 0", fontSize: "14px", color: "#999" }}>
+              Last updated:{" "}
+              {new Date(
+                project.lastModified || project.createdAt
+              ).toLocaleDateString()}
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                marginTop: "15px",
+                paddingTop: "15px",
+                borderTop: "1px solid #eee",
+              }}
+            >
+              <button
+                onClick={() => continueProject(project.id)}
+                className="btn btn-primary"
+                style={{ flex: 1, padding: "10px" }}
+              >
+                📸{" "}
+                {project.rtus?.length > 0 ? "Continue Survey" : "Start Survey"}
+              </button>
+              {project.rtus?.length > 0 && (
+                <button
+                  onClick={() => viewReport(project)}
+                  className="btn btn-success"
+                  style={{ flex: 1, padding: "10px" }}
+                >
+                  📄 View Report
+                </button>
+              )}
+              <button
+                onClick={() => deleteProject(project.id)}
+                className="btn"
+                style={{
+                  backgroundColor: "#dc3545",
+                  color: "white",
+                  padding: "10px 15px",
+                }}
+              >
+                🗑️
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 };
 
-// Helper function to ensure all fields exist
-function ensureAllFields(data) {
-  const defaultStructure = getDefaultStructure();
-
-  // Merge the extracted data with default structure
-  const mergedData = {
-    systemType: { ...defaultStructure.systemType, ...data.systemType },
-    basicInfo: { ...defaultStructure.basicInfo, ...data.basicInfo },
-    electrical: { ...defaultStructure.electrical, ...data.electrical },
-    compressor1: { ...defaultStructure.compressor1, ...data.compressor1 },
-    compressor2: { ...defaultStructure.compressor2, ...data.compressor2 },
-    condenserFanMotor: {
-      ...defaultStructure.condenserFanMotor,
-      ...data.condenserFanMotor,
-    },
-    indoorFanMotor: {
-      ...defaultStructure.indoorFanMotor,
-      ...data.indoorFanMotor,
-    },
-    gasInformation: {
-      ...defaultStructure.gasInformation,
-      ...data.gasInformation,
-    },
-    cooling: { ...defaultStructure.cooling, ...data.cooling },
-    serviceLife: { ...defaultStructure.serviceLife, ...data.serviceLife },
-    warnings: data.warnings || defaultStructure.warnings,
-    overallConfidence: data.overallConfidence || "low",
-  };
-
-  return mergedData;
-}
-
-// Helper function to get default structure
-function getDefaultStructure() {
-  return {
-    systemType: {
-      category: "Not Available",
-      configuration: "Not Available",
-      confidence: "low",
-    },
-    basicInfo: {
-      manufacturer: "Not Available",
-      model: "Not Available",
-      serialNumber: "Not Available",
-      manufacturingYear: null,
-      currentAge: null,
-      condition: "Poor",
-      confidence: "low",
-    },
-    electrical: {
-      disconnectSize: "Not Available",
-      fuseSize: "Not Available",
-      voltage: "Not Available",
-      phase: "Not Available",
-      kw: "Not Available",
-      confidence: "low",
-    },
-    compressor1: {
-      quantity: "Not Available",
-      volts: "Not Available",
-      phase: "Not Available",
-      rla: "Not Available",
-      lra: "Not Available",
-      mca: "Not Available",
-      confidence: "low",
-    },
-    compressor2: {
-      quantity: "Not Available",
-      volts: "Not Available",
-      phase: "Not Available",
-      rla: "Not Available",
-      lra: "Not Available",
-      mocp: "Not Available",
-      confidence: "low",
-    },
-    condenserFanMotor: {
-      quantity: "Not Available",
-      volts: "Not Available",
-      phase: "Not Available",
-      fla: "Not Available",
-      hp: "Not Available",
-      confidence: "low",
-    },
-    indoorFanMotor: {
-      quantity: "Not Available",
-      volts: "Not Available",
-      phase: "Not Available",
-      fla: "Not Available",
-      hp: "Not Available",
-      confidence: "low",
-    },
-    gasInformation: {
-      gasType: "Not Available",
-      inputMinBTU: "Not Available",
-      inputMaxBTU: "Not Available",
-      outputCapacityBTU: "Not Available",
-      gasPipeSize: "Not Available",
-      confidence: "low",
-    },
-    cooling: {
-      tonnage: "Not Available",
-      refrigerant: "Not Available",
-      confidence: "low",
-    },
-    serviceLife: {
-      assessment: "Unable to determine",
-      recommendation: "Further evaluation needed",
-      ashrae_standard: "ASHRAE median service life for RTU: 15 years",
-    },
-    warnings: ["Complete nameplate analysis not possible"],
-    overallConfidence: "low",
-  };
-}
+export default ProjectList;

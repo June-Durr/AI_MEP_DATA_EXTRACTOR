@@ -24,22 +24,72 @@ exports.handler = async (event) => {
     let body = JSON.parse(event.body);
     const { imageBase64, equipmentType } = body;
 
-    // COMPREHENSIVE PROMPT WITH JSON-ONLY ENFORCEMENT
+    // COMPREHENSIVE PROMPT WITH JSON-ONLY ENFORCEMENT AND SERIAL NUMBER DECODING
     const comprehensivePrompt = `You are an expert MEP engineer analyzing an HVAC equipment nameplate. Extract ALL visible information and return it in the exact JSON format below.
 
 CRITICAL: Your response must be ONLY valid JSON with no additional text before or after. Do not include explanations, markdown code blocks, or any other text. Start your response with { and end with }.
 
 CRITICAL INSTRUCTIONS:
 1. Extract EVERY field you can see on the nameplate
-2. For Lennox serial numbers (format YYWWXXXXXX): YY = year, WW = week
-   - Decode the year: if YY = 56, that's 2006; if YY = 08, that's 2008
-   - Calculate age: 2025 - manufacturing year
-3. Leave fields as null if not visible
-4. For electrical specs, look for MCA, MOCP, RLA, LRA labels
-5. Return confidence level for each major section
-6. **COOLING TONNAGE - CRITICAL**: This is the COOLING CAPACITY, NOT the unit weight:
+2. For fields that are worn/damaged/illegible: use "Not legible"
+3. For fields that are completely missing from the nameplate: use "Not Available"
+4. NEVER leave any field as null - always use either the actual value, "Not legible", or "Not Available"
+5. **SERIAL NUMBER DECODING - CRITICAL**: Decode the serial number to determine manufacturing year and calculate current age. Each manufacturer has a different format:
+
+   **CARRIER / BRYANT / PAYNE:**
+   - Format: 4 digits + letters/numbers (e.g., 5210XXXXXX)
+   - First 2 digits = year (52 = 2002, 03 = 2003, 13 = 2013, 21 = 2021)
+   - 3rd & 4th digits = week of manufacture
+   - If year < 24, add 2000 (e.g., 03 = 2003, 21 = 2021)
+   - If year >= 24, could be 1924 (very old) or 2024+ (recent)
+   - Examples: "5210" = week 10 of 2002, "1352" = week 52 of 2013
+
+   **LENNOX:**
+   - Format: YYWWXXXXXX (10 digits, e.g., 5608D05236)
+   - First 2 digits YY = year (56 = 2006, 08 = 2008, 15 = 2015)
+   - Next 2 digits WW = week (01-52)
+   - If YY < 24, year = 2000 + YY (e.g., 06 = 2006, 15 = 2015)
+   - If YY >= 24, year = 1900 + YY (e.g., 56 = 1956) UNLESS recent unit
+   - For modern units: 56-99 likely means 1956-1999, 00-24 means 2000-2024
+   - Examples: "5608" = week 8 of 2006, "1552" = week 52 of 2015
+
+   **TRANE / AMERICAN STANDARD:**
+   - Format varies by age
+   - Older units (pre-2002): Serial starts with letter, then numbers
+   - Newer units (2002+): 9-10 digit format
+   - Post-2010: Often starts with year code (e.g., 3 = 2013, 4 = 2014, 5 = 2015, 6 = 2016)
+   - Example: "5082M12345" likely 2015, week 82 is invalid so week 08 year 2015
+
+   **YORK / COLEMAN / LUXAIRE:**
+   - Format: ABCDEFGHIJ (letter-based encoding)
+   - Year code: A=2004, B=2005, C=2006, D=2007, E=2008, F=2009, G=2010, H=2011, J=2012, K=2013, L=2014, M=2015, N=2016, P=2017, R=2018, S=2019, T=2020, U=2021, V=2022, W=2023, X=2024
+   - Example: "MCAH123456" = M=2015
+
+   **GOODMAN / AMANA:**
+   - Format: 10 digits (YYMMDXXXXX)
+   - First 2 digits YY = year (same rules: < 24 = 2000+, >= 50 = 1900+)
+   - Next 2 digits MM = month (01-12)
+   - Next 1 digit D = decade code (sometimes)
+   - Examples: "1305123456" = May 2013, "2101234567" = January 2021
+
+   **RHEEM / RUUD:**
+   - Format varies
+   - Often month-year codes in middle of serial
+   - Letters can indicate year (A=2002, B=2003, etc.)
+   - Example: "M051234567" where M=month code, 05=year 2005
+
+   **GENERAL DECODING RULES:**
+   - If serial format doesn't match known patterns: use "Not legible" for year and age
+   - Current year for age calculation: 2025
+   - Age = 2025 - manufacturing year
+   - If you identify year as 2006, age = 19 years
+   - If you identify year as 2015, age = 10 years
+
+6. For electrical specs, look for MCA, MOCP, RLA, LRA labels
+7. Return confidence level for each major section
+8. **COOLING TONNAGE - CRITICAL**: This is the COOLING CAPACITY, NOT the unit weight:
    - Look for labels: "COOLING CAPACITY", "TONS", "TON", "BTU/H", "MBH"
-   - Common conversions: 
+   - Common conversions:
      * 60,000 BTU/hr = 5 tons
      * 120,000 BTU/hr (or 120 MBH) = 10 tons
      * 180,000 BTU/hr (or 180 MBH) = 15 tons
@@ -49,77 +99,77 @@ CRITICAL INSTRUCTIONS:
      * LCA120xxx = 10 tons (120 = 120,000 BTU/hr)
    - NEVER report shipping weight (e.g., "5 LBS 6 OZ") as tonnage
    - NEVER report refrigerant charge weight as tonnage
-   - Format output as: "5 tons", "10 tons", "15 tons"
+   - Format output as: "5 tons", "10 tons", "15 tons", or "Not legible" or "Not Available"
 
 RETURN THIS EXACT JSON STRUCTURE (NO OTHER TEXT):
 {
   "systemType": {
-    "category": "Packaged Roof Top Unit" or "Split System" or "Other",
-    "configuration": "Electric Cooling / Gas Heat" or "Electric Cooling / Electric Heat" or "Electric Cooling / Heat Pump" or "Electric Cooling / No Heat",
+    "category": "Packaged Roof Top Unit" or "Split System" or "Other" or "Not Available",
+    "configuration": "Electric Cooling / Gas Heat" or "Electric Cooling / Electric Heat" or "Electric Cooling / Heat Pump" or "Electric Cooling / No Heat" or "Not Available",
     "confidence": "high" or "medium" or "low"
   },
   "basicInfo": {
-    "manufacturer": "string or null",
-    "model": "string or null",
-    "serialNumber": "string or null",
-    "manufacturingYear": number or null,
-    "currentAge": number or null,
-    "condition": "based on nameplate condition - Good/Fair/Poor",
+    "manufacturer": "string or 'Not legible' or 'Not Available'",
+    "model": "string or 'Not legible' or 'Not Available'",
+    "serialNumber": "string or 'Not legible' or 'Not Available'",
+    "manufacturingYear": "string or 'Not legible' or 'Not Available'",
+    "currentAge": "string or 'Not Available'",
+    "condition": "based on nameplate condition - Good/Fair/Poor or 'Not Available'",
     "confidence": "high" or "medium" or "low"
   },
   "electrical": {
-    "disconnectSize": "string or null",
-    "fuseSize": "string or null",
-    "voltage": "string or null",
-    "phase": "1" or "3" or null,
-    "kw": "string or null",
+    "disconnectSize": "string or 'Not legible' or 'Not Available'",
+    "fuseSize": "string or 'Not legible' or 'Not Available'",
+    "voltage": "string or 'Not legible' or 'Not Available'",
+    "phase": "1" or "3" or "Not legible" or "Not Available",
+    "kw": "string or 'Not legible' or 'Not Available'",
     "confidence": "high" or "medium" or "low"
   },
   "compressor1": {
-    "quantity": number or null,
-    "volts": "string or null",
-    "phase": "1" or "3" or null,
-    "rla": "string or null",
-    "lra": "string or null",
-    "mca": "string or null",
+    "quantity": "string or 'Not legible' or 'Not Available'",
+    "volts": "string or 'Not legible' or 'Not Available'",
+    "phase": "1" or "3" or "Not legible" or "Not Available",
+    "rla": "string or 'Not legible' or 'Not Available'",
+    "lra": "string or 'Not legible' or 'Not Available'",
+    "mca": "string or 'Not legible' or 'Not Available'",
     "confidence": "high" or "medium" or "low"
   },
   "compressor2": {
-    "quantity": number or null,
-    "volts": "string or null",
-    "phase": "1" or "3" or null,
-    "rla": "string or null",
-    "lra": "string or null",
-    "mocp": "string or null",
+    "quantity": "string or 'Not legible' or 'Not Available'",
+    "volts": "string or 'Not legible' or 'Not Available'",
+    "phase": "1" or "3" or "Not legible" or "Not Available",
+    "rla": "string or 'Not legible' or 'Not Available'",
+    "lra": "string or 'Not legible' or 'Not Available'",
+    "mocp": "string or 'Not legible' or 'Not Available'",
     "confidence": "high" or "medium" or "low"
   },
   "condenserFanMotor": {
-    "quantity": number or null,
-    "volts": "string or null",
-    "phase": "1" or "3" or null,
-    "fla": "string or null",
-    "hp": "string or null",
+    "quantity": "string or 'Not legible' or 'Not Available'",
+    "volts": "string or 'Not legible' or 'Not Available'",
+    "phase": "1" or "3" or "Not legible" or "Not Available",
+    "fla": "string or 'Not legible' or 'Not Available'",
+    "hp": "string or 'Not legible' or 'Not Available'",
     "confidence": "high" or "medium" or "low"
   },
   "indoorFanMotor": {
-    "quantity": number or null,
-    "volts": "string or null",
-    "phase": "1" or "3" or null,
-    "fla": "string or null",
-    "hp": "string or null",
+    "quantity": "string or 'Not legible' or 'Not Available'",
+    "volts": "string or 'Not legible' or 'Not Available'",
+    "phase": "1" or "3" or "Not legible" or "Not Available",
+    "fla": "string or 'Not legible' or 'Not Available'",
+    "hp": "string or 'Not legible' or 'Not Available'",
     "confidence": "high" or "medium" or "low"
   },
   "gasInformation": {
-    "gasType": "Natural Gas" or "Propane" or null,
-    "inputMinBTU": "string or null",
-    "inputMaxBTU": "string or null",
-    "outputCapacityBTU": "string or null",
-    "gasPipeSize": "string or null",
+    "gasType": "Natural Gas" or "Propane" or "Not legible" or "Not Available",
+    "inputMinBTU": "string or 'Not legible' or 'Not Available'",
+    "inputMaxBTU": "string or 'Not legible' or 'Not Available'",
+    "outputCapacityBTU": "string or 'Not legible' or 'Not Available'",
+    "gasPipeSize": "string or 'Not legible' or 'Not Available'",
     "confidence": "high" or "medium" or "low"
   },
   "cooling": {
-    "tonnage": "string - COOLING CAPACITY ONLY (e.g. '5 tons', '10 tons', '15 tons'). Calculate from BTU/hr or model number. NEVER use unit weight.",
-    "refrigerant": "string or null",
+    "tonnage": "string - COOLING CAPACITY ONLY (e.g. '5 tons', '10 tons', '15 tons') or 'Not legible' or 'Not Available'. Calculate from BTU/hr or model number. NEVER use unit weight.",
+    "refrigerant": "string or 'Not legible' or 'Not Available'",
     "confidence": "high" or "medium" or "low"
   },
   "serviceLife": {
@@ -128,24 +178,45 @@ RETURN THIS EXACT JSON STRUCTURE (NO OTHER TEXT):
     "ashrae_standard": "ASHRAE median service life for RTU: 15 years"
   },
   "warnings": [
-    "list any safety concerns, illegible fields, or critical issues"
+    "list any safety concerns, illegible fields, or critical issues - if the nameplate is worn or damaged, include specific fields that are illegible"
   ],
   "overallConfidence": "high" or "medium" or "low"
 }
 
 EXAMPLE FOR LENNOX LCA120H2RN1Y, Serial 5608D05236:
+- Manufacturer: Lennox
 - Serial 5608 = Year 2006 (56 = 06, 08 = week 8)
+- manufacturingYear: "2006"
+- currentAge: "19"
 - Age = 2025 - 2006 = 19 years
 - Model LCA120 = 10 tons (120 MBH / 12 = 10 tons)
 - Status: BEYOND SERVICE LIFE
 
-EXAMPLE FOR LENNOX ZCA06054BN1Y, Serial 0608xxxxx:
-- Serial 0608 = Year 2006, week 8
-- Age = 2025 - 2006 = 19 years  
-- Model ZCA060 = 5 tons (060 = 60,000 BTU/hr / 12,000 = 5 tons)
+EXAMPLE FOR CARRIER, Serial 5210ABCDEF:
+- Manufacturer: Carrier
+- Serial 5210 = Year 2002 (52 = 02), week 10
+- manufacturingYear: "2002"
+- currentAge: "23"
+- Age = 2025 - 2002 = 23 years
 - Status: BEYOND SERVICE LIFE
 
-Extract all visible information now. RETURN ONLY JSON, NO OTHER TEXT.`;
+EXAMPLE FOR YORK, Serial MCAH123456:
+- Manufacturer: York
+- Serial MCAH = M = 2015
+- manufacturingYear: "2015"
+- currentAge: "10"
+- Age = 2025 - 2015 = 10 years
+- Status: Within service life
+
+EXAMPLE FOR GOODMAN, Serial 1305123456:
+- Manufacturer: Goodman
+- Serial 1305 = Year 2013 (13), month 05 (May)
+- manufacturingYear: "2013"
+- currentAge: "12"
+- Age = 2025 - 2013 = 12 years
+- Status: Within service life
+
+Extract all visible information now. Apply the serial number decoding rules based on the manufacturer you identify. RETURN ONLY JSON, NO OTHER TEXT.`;
 
     console.log("Calling Claude with comprehensive prompt...");
 
