@@ -1,76 +1,86 @@
-// frontend/src/components/AddressAutocomplete.js - SIMPLIFIED VERSION
+// frontend/src/components/AddressAutocomplete.js - With Dynamic Loading
 import React, { useRef, useEffect, useState } from "react";
 
 const AddressAutocomplete = ({ value, onChange, placeholder, style }) => {
   const inputRef = useRef(null);
+  const autocompleteRef = useRef(null);
   const [googleLoaded, setGoogleLoaded] = useState(false);
+  const [inputValue, setInputValue] = useState(value || "");
 
+  // Load Google Maps API
   useEffect(() => {
-    // Check if Google Maps API is loaded
-    if (window.google && window.google.maps && window.google.maps.places) {
-      setGoogleLoaded(true);
+    const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
 
-      try {
-        // Try to use the new PlaceAutocompleteElement
-        if (window.google.maps.places.PlaceAutocompleteElement) {
-          const autocompleteElement =
-            new window.google.maps.places.PlaceAutocompleteElement();
-
-          // Set placeholder on the input inside the element
-          setTimeout(() => {
-            const input = autocompleteElement.querySelector("input");
-            if (input && placeholder) {
-              input.placeholder = placeholder;
-            }
-          }, 100);
-
-          // Clear and append
-          if (inputRef.current) {
-            inputRef.current.innerHTML = "";
-            inputRef.current.appendChild(autocompleteElement);
-          }
-
-          // Listen for selection
-          autocompleteElement.addEventListener(
-            "gmp-placeselect",
-            async (event) => {
-              const place = event.place;
-              if (!place) return;
-
-              try {
-                await place.fetchFields({ fields: ["formattedAddress"] });
-                onChange(place.formattedAddress || "");
-              } catch (err) {
-                console.error("Error fetching place:", err);
-              }
-            }
-          );
-
-          return; // Exit if successful
-        }
-      } catch (err) {
-        console.error("Google Places error:", err);
-      }
+    if (!apiKey) {
+      console.warn("Google Maps API key not found");
+      return;
     }
 
-    // Fallback: Google not loaded or error - render will show regular input
-  }, [onChange, placeholder]);
+    // Check if already loaded
+    if (window.google && window.google.maps && window.google.maps.places) {
+      setGoogleLoaded(true);
+      return;
+    }
 
-  // If Google isn't loaded or errored, show regular input
-  if (!googleLoaded) {
-    return (
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        style={style}
-      />
-    );
-  }
+    // Load the script
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setGoogleLoaded(true);
+    document.head.appendChild(script);
 
-  // Google is loaded, render container for autocomplete element
-  return <div ref={inputRef} style={{ width: "100%" }} />;
+    return () => {
+      // Cleanup if needed
+    };
+  }, []);
+
+  // Initialize autocomplete
+  useEffect(() => {
+    if (!googleLoaded || !inputRef.current) return;
+
+    try {
+      // Use the classic Autocomplete widget
+      const autocomplete = new window.google.maps.places.Autocomplete(
+        inputRef.current,
+        {
+          types: ["address"],
+          fields: ["formatted_address", "address_components"],
+        }
+      );
+
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (place.formatted_address) {
+          setInputValue(place.formatted_address);
+          onChange(place.formatted_address);
+        }
+      });
+
+      autocompleteRef.current = autocomplete;
+    } catch (err) {
+      console.error("Error initializing autocomplete:", err);
+    }
+  }, [googleLoaded, onChange]);
+
+  // Update local state when prop changes
+  useEffect(() => {
+    setInputValue(value || "");
+  }, [value]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      value={inputValue}
+      onChange={(e) => {
+        setInputValue(e.target.value);
+        onChange(e.target.value);
+      }}
+      placeholder={placeholder}
+      style={style}
+    />
+  );
 };
 
 export default AddressAutocomplete;

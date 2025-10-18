@@ -198,6 +198,7 @@ const ProjectList = () => {
                 borderRadius: "4px",
                 border: "1px solid #ddd",
                 fontSize: "16px",
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -225,6 +226,7 @@ const ProjectList = () => {
                 borderRadius: "4px",
                 border: "1px solid #ddd",
                 fontSize: "16px",
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -251,6 +253,7 @@ const ProjectList = () => {
                 borderRadius: "4px",
                 border: "1px solid #ddd",
                 fontSize: "16px",
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -278,6 +281,7 @@ const ProjectList = () => {
                 borderRadius: "4px",
                 border: "1px solid #ddd",
                 fontSize: "16px",
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -305,6 +309,7 @@ const ProjectList = () => {
                 borderRadius: "4px",
                 border: "1px solid #ddd",
                 fontSize: "16px",
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -331,6 +336,7 @@ const ProjectList = () => {
                 borderRadius: "4px",
                 border: "1px solid #ddd",
                 fontSize: "16px",
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -358,6 +364,7 @@ const ProjectList = () => {
                 borderRadius: "4px",
                 border: "1px solid #ddd",
                 fontSize: "16px",
+                boxSizing: "border-box",
               }}
             />
           </div>
@@ -386,6 +393,7 @@ const ProjectList = () => {
                 borderRadius: "4px",
                 border: "1px solid #ddd",
                 fontSize: "16px",
+                boxSizing: "border-box",
               }}
             >
               <option value="">Select space type...</option>
