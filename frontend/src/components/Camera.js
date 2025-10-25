@@ -932,23 +932,31 @@ const Camera = () => {
                         </h5>
                         <p>
                           <strong>Gas Type:</strong>{" "}
-                          {extractedData.gasInformation?.gasType ||
-                            "Not Available"}
+                          {userInputs.heatType === "Electric"
+                            ? "N/A"
+                            : extractedData.gasInformation?.gasType ||
+                              "Not Available"}
                         </p>
                         <p>
                           <strong>Input Min BTU:</strong>{" "}
-                          {extractedData.gasInformation?.inputMinBTU ||
-                            "Not Available"}
+                          {userInputs.heatType === "Electric"
+                            ? "N/A"
+                            : extractedData.gasInformation?.inputMinBTU ||
+                              "Not Available"}
                         </p>
                         <p>
                           <strong>Input Max BTU:</strong>{" "}
-                          {extractedData.gasInformation?.inputMaxBTU ||
-                            "Not Available"}
+                          {userInputs.heatType === "Electric"
+                            ? "N/A"
+                            : extractedData.gasInformation?.inputMaxBTU ||
+                              "Not Available"}
                         </p>
                         <p>
                           <strong>Output Capacity BTU:</strong>{" "}
-                          {extractedData.gasInformation?.outputCapacityBTU ||
-                            "Not Available"}
+                          {userInputs.heatType === "Electric"
+                            ? "N/A"
+                            : extractedData.gasInformation?.outputCapacityBTU ||
+                              "Not Available"}
                         </p>
                       </div>
 
