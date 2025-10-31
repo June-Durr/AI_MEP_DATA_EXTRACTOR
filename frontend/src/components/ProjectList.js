@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import ReportGenerator from "./ReportGenerator";
-import AddressAutocomplete from "./AddressAutocomplete";
 
 const ProjectList = () => {
   const navigate = useNavigate();
@@ -241,10 +240,11 @@ const ProjectList = () => {
             >
               Address:
             </label>
-            <AddressAutocomplete
+            <input
+              type="text"
               value={newProject.address}
-              onChange={(value) =>
-                setNewProject({ ...newProject, address: value })
+              onChange={(e) =>
+                setNewProject({ ...newProject, address: e.target.value })
               }
               placeholder="123 Main Street, Miami, FL"
               style={{

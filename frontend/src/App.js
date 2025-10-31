@@ -13,6 +13,7 @@ import "./App.css";
 
 function AppContent() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [apiConnected, setApiConnected] = useState(true);
   const location = useLocation();
 
   useEffect(() => {
@@ -103,11 +104,11 @@ function AppContent() {
       >
         <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
           <p style={{ margin: "0 0 10px 0" }}>
-            Schnackel Engineers - MEP Survey AI Agent
+            MEP Survey AI Agent
           </p>
           <p style={{ margin: 0 }}>
             Status: {isOnline ? "🟢 Online" : "🔴 Offline"} | API:{" "}
-            {process.env.REACT_APP_API_URL ? "✅ Configured" : "❌ Not Set"} |
+            {apiConnected ? "✅ Connected" : "❌ Disconnected"} |
             Built for fieldwork • Powered by AWS • Enhanced by AI
           </p>
         </div>

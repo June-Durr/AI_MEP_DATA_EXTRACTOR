@@ -130,3 +130,16 @@ code {
   border: 1px solid #ffeaa7;
   color: #856404;
 }
+
+input::placeholder {
+  color: #999 !important;
+  opacity: 1;
+}
+
+input:-ms-input-placeholder {
+  color: #999 !important;
+}
+
+input::-ms-input-placeholder {
+  color: #999 !important;
+}

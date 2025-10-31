@@ -4,13 +4,27 @@ import React, { useState, useEffect } from "react";
 const ReportGenerator = ({ project, squareFootage, isLivePreview = false, currentExtractedData = null, currentRTUNumber = null, currentUserInputs = null }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedReport, setEditedReport] = useState("");
+  const [editingRTUs, setEditingRTUs] = useState({}); // Track which RTUs are being edited
+  const [editedRTUData, setEditedRTUData] = useState({}); // Store edited RTU data
+
+  // Track only when editing state changes
+  useEffect(() => {
+    if (Object.keys(editingRTUs).length > 0) {
+      console.log("=== EDITING STATE ACTIVE ===");
+      console.log("Currently editing RTUs:", editingRTUs);
+      console.log("Edited data:", editedRTUData);
+    }
+  }, [editingRTUs, editedRTUData]);
 
   // Early return must come after all hooks to comply with Rules of Hooks
-  const savedRTUs = project?.rtus || [];
+  // Memoize savedRTUs to prevent unnecessary re-renders
+  const savedRTUs = React.useMemo(() => project?.rtus || [], [project?.rtus]);
 
   // If we have current extracted data, create a temporary RTU object and add it to the list
-  const rtus = currentExtractedData
-    ? [
+  // Use useMemo to prevent creating new objects on every render
+  const rtus = React.useMemo(() => {
+    if (currentExtractedData) {
+      return [
         ...savedRTUs,
         {
           id: `temp-${currentRTUNumber}`,
@@ -22,13 +36,21 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
             gasPipeSize: currentUserInputs?.heatType === "Gas" ? currentUserInputs?.gasPipeSize : null,
           }
         }
-      ]
-    : savedRTUs;
+      ];
+    }
+    return savedRTUs;
+  }, [savedRTUs, currentExtractedData, currentRTUNumber, currentUserInputs]);
 
   const rtuCount = rtus.length;
 
   // Helper to safely extract data from nested structure
+  // If the RTU has been edited, use the edited data
   const extractRTUData = (rtu) => {
+    // Check if we have edited data for this RTU
+    if (editedRTUData[rtu.id]) {
+      return editedRTUData[rtu.id];
+    }
+
     const data = rtu.data || {};
 
     // Handle both old flat structure and new nested structure
@@ -208,12 +230,149 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       : ""
   } The majority of ductwork in the space is interior insulated rectangular sheet metal ductwork with insulated flexible diffuser connections.`;
 
-  // Update edited report when mechanicalSystemsReport changes
+  // Update edited report when mechanicalSystemsReport changes (new RTUs added or edited)
   useEffect(() => {
-    if (!isEditing) {
-      setEditedReport(mechanicalSystemsReport);
+    setEditedReport(mechanicalSystemsReport);
+  }, [mechanicalSystemsReport, editedRTUData]);
+
+  // Handle RTU editing
+  const startEditingRTU = (rtuId) => {
+    const rtu = rtus.find(r => r.id === rtuId);
+    if (rtu) {
+      const rtuData = extractRTUData(rtu);
+      console.log("Starting edit for RTU:", rtuId, "with data:", rtuData);
+
+      // Use functional updates to ensure state is set correctly
+      setEditedRTUData((prev) => ({ ...prev, [rtuId]: rtuData }));
+      setEditingRTUs((prev) => ({ ...prev, [rtuId]: true }));
     }
-  }, [mechanicalSystemsReport, isEditing]);
+  };
+
+  const updateRTUField = (rtuId, field, value) => {
+    console.log("=== UPDATE RTU FIELD ===");
+    console.log("RTU ID:", rtuId);
+    console.log("Field:", field);
+    console.log("New value:", value);
+
+    setEditedRTUData((prev) => {
+      console.log("Previous editedRTUData:", prev);
+      const updated = {
+        ...prev,
+        [rtuId]: {
+          ...(prev[rtuId] || {}),
+          [field]: value
+        }
+      };
+      console.log("Updated editedRTUData:", updated);
+      return updated;
+    });
+  };
+
+  const saveRTUEdit = (rtuId) => {
+    // Handle temp RTUs (live preview) - just update local state, will be saved when user clicks "Save & Add RTU"
+    if (rtuId.startsWith('temp-')) {
+      setEditingRTUs((prev) => ({ ...prev, [rtuId]: false }));
+      // The edited data stays in editedRTUData and will be used in display
+      return;
+    }
+
+    try {
+      const savedProjects = localStorage.getItem("mep-survey-projects");
+      if (!savedProjects) {
+        alert("Error: No projects found in storage");
+        return;
+      }
+
+      const projects = JSON.parse(savedProjects);
+      const projectIndex = projects.findIndex((p) => p.id === project.id);
+
+      if (projectIndex === -1) {
+        alert("Error: Project not found");
+        return;
+      }
+
+      const rtuIndex = projects[projectIndex].rtus.findIndex((r) => r.id === rtuId);
+      if (rtuIndex === -1) {
+        alert("Error: RTU not found");
+        return;
+      }
+
+      // Update the RTU data with edited values
+      const updatedData = editedRTUData[rtuId];
+
+      // Validate that we have edited data
+      if (!updatedData) {
+        alert("Error: No edited data found for this RTU. Please try editing again.");
+        console.error("Missing edited data for RTU:", rtuId);
+        console.error("Current editedRTUData:", editedRTUData);
+        setEditingRTUs((prev) => ({ ...prev, [rtuId]: false }));
+        return;
+      }
+      const originalRTU = projects[projectIndex].rtus[rtuIndex];
+
+      console.log("=== SAVE RTU EDIT DEBUG ===");
+      console.log("Before save - Total RTU count:", projects[projectIndex].rtus.length);
+      console.log("Updating RTU ID:", rtuId);
+      console.log("Updating RTU at index:", rtuIndex);
+      console.log("Updated data:", updatedData);
+
+      // IMPORTANT: Preserve ALL original data, only update the specific fields
+      const updatedRTU = {
+        ...originalRTU,
+        data: {
+          ...originalRTU.data,
+          basicInfo: {
+            ...(originalRTU.data?.basicInfo || {}),
+            manufacturer: updatedData.manufacturer,
+            model: updatedData.model,
+            manufacturingYear: updatedData.year,
+            currentAge: parseInt(updatedData.age) || 0,
+          },
+          cooling: {
+            ...(originalRTU.data?.cooling || {}),
+            tonnage: updatedData.tonnage,
+          },
+        },
+      };
+
+      // Replace only the specific RTU, keeping all others intact
+      projects[projectIndex].rtus[rtuIndex] = updatedRTU;
+      projects[projectIndex].lastModified = new Date().toISOString();
+
+      console.log("After update - Total RTU count:", projects[projectIndex].rtus.length);
+      console.log("All RTU IDs:", projects[projectIndex].rtus.map(r => ({ id: r.id, number: r.number })));
+
+      // Save to localStorage
+      localStorage.setItem("mep-survey-projects", JSON.stringify(projects));
+      console.log("Saved to localStorage successfully");
+
+      // Verify the save
+      const verification = JSON.parse(localStorage.getItem("mep-survey-projects"));
+      const verifiedProject = verification.find(p => p.id === project.id);
+      console.log("Verification - RTU count after save:", verifiedProject.rtus.length);
+      console.log("=== END DEBUG ===");
+
+      // Exit edit mode
+      setEditingRTUs((prev) => ({ ...prev, [rtuId]: false }));
+
+      alert(`RTU saved successfully! RTU count: ${verifiedProject.rtus.length}\n\nThe page will now reload to show your changes.`);
+
+      // Reload after user clicks OK
+      window.location.reload();
+    } catch (error) {
+      console.error("Error saving RTU edit:", error);
+      alert(`Error saving RTU: ${error.message}\n\nCheck console for details.`);
+    }
+  };
+
+  const cancelRTUEdit = (rtuId) => {
+    setEditingRTUs((prev) => ({ ...prev, [rtuId]: false }));
+    setEditedRTUData((prev) => {
+      const newData = { ...prev };
+      delete newData[rtuId];
+      return newData;
+    });
+  };
 
   // Early return after all hooks to comply with Rules of Hooks
   if (!project || (rtus.length === 0 && !currentExtractedData)) {
@@ -477,30 +636,93 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
               >
                 Status
               </th>
+              <th
+                style={{
+                  border: "1px solid #ddd",
+                  padding: "10px",
+                  textAlign: "center",
+                }}
+              >
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
             {rtus.map((rtu, index) => {
               const rtuData = extractRTUData(rtu);
+              const isEditingThisRTU = editingRTUs[rtu.id];
+
+              // For temp RTUs (live preview), always use edited data if it exists
+              // For saved RTUs, only use edited data when actively editing
+              const isTempRTU = rtu.id.startsWith('temp-');
+              const displayData = (isTempRTU && editedRTUData[rtu.id]) || (isEditingThisRTU && editedRTUData[rtu.id])
+                ? editedRTUData[rtu.id]
+                : rtuData;
+
               return (
                 <tr key={rtu.id}>
                   <td style={{ border: "1px solid #ddd", padding: "10px" }}>
                     #{rtu.number}
                   </td>
                   <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                    {rtuData.manufacturer}
+                    {isEditingThisRTU ? (
+                      <input
+                        type="text"
+                        value={displayData.manufacturer}
+                        onChange={(e) => updateRTUField(rtu.id, 'manufacturer', e.target.value)}
+                        style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                      />
+                    ) : (
+                      rtuData.manufacturer
+                    )}
                   </td>
                   <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                    {rtuData.model}
+                    {isEditingThisRTU ? (
+                      <input
+                        type="text"
+                        value={displayData.model}
+                        onChange={(e) => updateRTUField(rtu.id, 'model', e.target.value)}
+                        style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                      />
+                    ) : (
+                      rtuData.model
+                    )}
                   </td>
                   <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                    {rtuData.tonnage}
+                    {isEditingThisRTU ? (
+                      <input
+                        type="text"
+                        value={displayData.tonnage}
+                        onChange={(e) => updateRTUField(rtu.id, 'tonnage', e.target.value)}
+                        style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                      />
+                    ) : (
+                      rtuData.tonnage
+                    )}
                   </td>
                   <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                    {rtuData.year}
+                    {isEditingThisRTU ? (
+                      <input
+                        type="text"
+                        value={displayData.year}
+                        onChange={(e) => updateRTUField(rtu.id, 'year', e.target.value)}
+                        style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                      />
+                    ) : (
+                      rtuData.year
+                    )}
                   </td>
                   <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                    {rtuData.age} years
+                    {isEditingThisRTU ? (
+                      <input
+                        type="number"
+                        value={displayData.age}
+                        onChange={(e) => updateRTUField(rtu.id, 'age', e.target.value)}
+                        style={{ width: "60px", padding: "4px", fontSize: "13px" }}
+                      />
+                    ) : (
+                      `${rtuData.age} years`
+                    )}
                   </td>
                   <td
                     style={{
@@ -511,6 +733,56 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                     }}
                   >
                     {rtuData.age > 15 ? "Replace" : "OK"}
+                  </td>
+                  <td style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
+                    {isEditingThisRTU ? (
+                      <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
+                        <button
+                          onClick={() => saveRTUEdit(rtu.id)}
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: "12px",
+                            backgroundColor: "#28a745",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          ✓ Save
+                        </button>
+                        <button
+                          onClick={() => cancelRTUEdit(rtu.id)}
+                          style={{
+                            padding: "4px 8px",
+                            fontSize: "12px",
+                            backgroundColor: "#6c757d",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          ✕ Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEditingRTU(rtu.id)}
+                        style={{
+                          padding: "4px 8px",
+                          fontSize: "12px",
+                          backgroundColor: "#007bff",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                        }}
+                        title="Edit RTU"
+                      >
+                        ✏️ Edit
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -526,7 +798,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                 {totalTonnage.toFixed(1)} tons
               </td>
               <td
-                colSpan="3"
+                colSpan="4"
                 style={{ border: "1px solid #ddd", padding: "10px" }}
               >
                 {coolingEstimate && `Estimated Need: ${coolingEstimate} tons`}
@@ -614,4 +886,15 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
   );
 };
 
-export default ReportGenerator;
+// Wrap in React.memo to prevent unnecessary re-renders
+export default React.memo(ReportGenerator, (prevProps, nextProps) => {
+  // Custom comparison function - only re-render if these props actually changed
+  return (
+    prevProps.project === nextProps.project &&
+    prevProps.squareFootage === nextProps.squareFootage &&
+    prevProps.isLivePreview === nextProps.isLivePreview &&
+    prevProps.currentExtractedData === nextProps.currentExtractedData &&
+    prevProps.currentRTUNumber === nextProps.currentRTUNumber &&
+    JSON.stringify(prevProps.currentUserInputs) === JSON.stringify(nextProps.currentUserInputs)
+  );
+});

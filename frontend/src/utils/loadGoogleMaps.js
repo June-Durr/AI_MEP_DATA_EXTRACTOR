@@ -27,10 +27,10 @@ export const loadGoogleMaps = () => {
       return;
     }
 
-    // Create script tag with proper async loading
+    // Create script tag with proper async loading for NEW Places API
     const script = document.createElement("script");
-    // NEW
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.REACT_APP_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`;
+    // Use the NEW Places API (maps/api/js not maps.googleapis.com/maps/api/js/libraries)
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.REACT_APP_GOOGLE_MAPS_API_KEY}&libraries=places,marker&v=weekly`;
     script.async = true;
     script.defer = true;
 
