@@ -28,6 +28,10 @@ const ElectricalSurvey = () => {
     panelDesignation: "",
     panelLocation: "",
     condition: "Good",
+    // NEW HIERARCHY FIELDS:
+    isServiceEntrance: false,      // Checkbox: "Is this the main service/meter?"
+    feedsFromPanel: "",            // Dropdown: "Fed from which panel?" (shows previously captured panels)
+    subfeedBreakerSize: ""         // Text input: "Subfeed breaker size (if applicable)"
   });
 
   // Project and panel/transformer state
@@ -78,6 +82,10 @@ const ElectricalSurvey = () => {
             panelDesignation: userInputs.panelDesignation,
             panelLocation: userInputs.panelLocation,
             condition: userInputs.condition,
+            // Include hierarchy fields
+            isServiceEntrance: userInputs.isServiceEntrance,
+            feedsFromPanel: userInputs.feedsFromPanel,
+            subfeedBreakerSize: userInputs.subfeedBreakerSize,
           },
           // DO NOT store image to avoid quota error
           capturedAt: new Date().toISOString(),
@@ -365,6 +373,9 @@ const ElectricalSurvey = () => {
         panelDesignation: "",
         panelLocation: "",
         condition: "Good",
+        isServiceEntrance: false,
+        feedsFromPanel: "",
+        subfeedBreakerSize: ""
       });
     }
   };
@@ -492,6 +503,9 @@ const ElectricalSurvey = () => {
                           panelDesignation: "",
                           panelLocation: "",
                           condition: "Good",
+                          isServiceEntrance: false,
+                          feedsFromPanel: "",
+                          subfeedBreakerSize: ""
                         });
                       }}
                       style={{ marginRight: "10px" }}
@@ -523,6 +537,9 @@ const ElectricalSurvey = () => {
                           panelDesignation: "",
                           panelLocation: "",
                           condition: "Good",
+                          isServiceEntrance: false,
+                          feedsFromPanel: "",
+                          subfeedBreakerSize: ""
                         });
                       }}
                       style={{ marginRight: "10px" }}
@@ -643,6 +660,111 @@ const ElectricalSurvey = () => {
                     )}
                   </select>
                 </div>
+
+                {/* HIERARCHY FIELDS - Only show for panels, not transformers */}
+                {equipmentType === "panel" && (
+                  <>
+                    <div style={{ marginBottom: "15px" }}>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          padding: "10px",
+                          backgroundColor: "#f8f9fa",
+                          borderRadius: "4px",
+                          border: "1px solid #ddd",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={userInputs.isServiceEntrance}
+                          onChange={(e) =>
+                            setUserInputs({
+                              ...userInputs,
+                              isServiceEntrance: e.target.checked,
+                              // If marking as service entrance, clear feedsFromPanel
+                              feedsFromPanel: e.target.checked ? "" : userInputs.feedsFromPanel,
+                            })
+                          }
+                          style={{ marginRight: "10px", width: "18px", height: "18px" }}
+                        />
+                        <span style={{ fontWeight: "500" }}>
+                          Mark as Service Entrance / Main Panel
+                        </span>
+                      </label>
+                    </div>
+
+                    {!userInputs.isServiceEntrance && (
+                      <div style={{ marginBottom: "15px" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "5px",
+                            fontWeight: "500",
+                          }}
+                        >
+                          Fed from panel:
+                        </label>
+                        <select
+                          value={userInputs.feedsFromPanel}
+                          onChange={(e) =>
+                            setUserInputs({
+                              ...userInputs,
+                              feedsFromPanel: e.target.value,
+                            })
+                          }
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            borderRadius: "4px",
+                            border: "1px solid #ddd",
+                            fontSize: "16px",
+                          }}
+                        >
+                          <option value="">Not applicable / Unknown</option>
+                          {projectPanels.map((panel) => (
+                            <option key={panel.id} value={panel.data?.panelDesignation || `Panel ${panel.number}`}>
+                              {panel.data?.panelDesignation || `Panel ${panel.number}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {userInputs.feedsFromPanel && (
+                      <div style={{ marginBottom: "15px" }}>
+                        <label
+                          style={{
+                            display: "block",
+                            marginBottom: "5px",
+                            fontWeight: "500",
+                          }}
+                        >
+                          Subfeed breaker size:
+                        </label>
+                        <input
+                          type="text"
+                          value={userInputs.subfeedBreakerSize}
+                          onChange={(e) =>
+                            setUserInputs({
+                              ...userInputs,
+                              subfeedBreakerSize: e.target.value,
+                            })
+                          }
+                          placeholder="e.g., 100A, 200A, etc."
+                          style={{
+                            width: "100%",
+                            padding: "10px",
+                            borderRadius: "4px",
+                            border: "1px solid #ddd",
+                            fontSize: "16px",
+                          }}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               <div className="card" style={{ marginBottom: "20px" }}>

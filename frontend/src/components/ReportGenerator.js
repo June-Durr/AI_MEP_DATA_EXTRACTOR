@@ -61,6 +61,10 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
             panelDesignation: currentUserInputs?.panelDesignation || "",
             panelLocation: currentUserInputs?.panelLocation || "",
             condition: currentUserInputs?.condition || "Good",
+            // Include hierarchy fields
+            isServiceEntrance: currentUserInputs?.isServiceEntrance || false,
+            feedsFromPanel: currentUserInputs?.feedsFromPanel || "",
+            subfeedBreakerSize: currentUserInputs?.subfeedBreakerSize || "",
           }
         }
       ];
@@ -138,12 +142,17 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       model: data.basicInfo?.model || "Unknown",
       voltage: data.electrical?.voltage || "Unknown",
       phase: data.electrical?.phase || "Unknown",
+      wireConfig: data.electrical?.wireConfig || "",
       busRating: data.electrical?.busRating || "Unknown",
       mainBreakerSize: data.incomingTermination?.mainBreakerSize || "MLO",
       condition: data.condition || "Unknown",
       isFPE: data.safetyWarnings?.isFPE || false,
       isZinsco: data.safetyWarnings?.isZinsco || false,
       isChallenger: data.safetyWarnings?.isChallenger || false,
+      // Hierarchy fields
+      isServiceEntrance: data.isServiceEntrance || false,
+      feedsFromPanel: data.feedsFromPanel || "",
+      subfeedBreakerSize: data.subfeedBreakerSize || "",
     };
   };
 
@@ -326,92 +335,171 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       : ""
   } The majority of ductwork in the space is interior insulated rectangular sheet metal ductwork with insulated flexible diffuser connections.`;
 
-  // Generate electrical systems report
+  // Sort electrical equipment by hierarchy
+  const sortElectricalHierarchy = (panels, transformers) => {
+    const sorted = [];
+
+    // 1. TRANSFORMERS FIRST (if any exist)
+    transformers.forEach(t => {
+      sorted.push({
+        type: 'transformer',
+        level: 0,
+        data: t
+      });
+    });
+
+    // 2. FIND MAIN PANEL (service entrance)
+    const mainPanel = panels.find(p =>
+      p.data.isServiceEntrance === true
+    );
+
+    // FALLBACK: If no panel marked as service entrance, use highest amp rating
+    const fallbackMain = panels.reduce((max, p) => {
+      const amps = parseInt(p.data.electrical?.busRating) || 0;
+      const maxAmps = parseInt(max?.data?.electrical?.busRating) || 0;
+      return amps > maxAmps ? p : max;
+    }, null);
+
+    const primaryMain = mainPanel || fallbackMain;
+
+    if (primaryMain) {
+      sorted.push({
+        type: 'main',
+        level: 1,
+        data: primaryMain
+      });
+    }
+
+    // 3. BUILD HIERARCHY TREE (recursive function)
+    const addChildPanels = (parentDesignation, currentLevel) => {
+      const children = panels
+        .filter(p =>
+          p.data.feedsFromPanel === parentDesignation &&
+          p.id !== primaryMain?.id  // Don't include main panel again
+        )
+        .sort((a, b) => {
+          // Sort by amp rating descending
+          const ampsA = parseInt(a.data.electrical?.busRating) || 0;
+          const ampsB = parseInt(b.data.electrical?.busRating) || 0;
+          return ampsB - ampsA;
+        });
+
+      children.forEach(child => {
+        sorted.push({
+          type: currentLevel === 1 ? 'distribution' : 'branch',
+          level: currentLevel + 1,
+          data: child
+        });
+
+        // Recursive: check if this panel feeds others
+        addChildPanels(child.data.panelDesignation, currentLevel + 1);
+      });
+    };
+
+    if (primaryMain) {
+      addChildPanels(primaryMain.data.panelDesignation, 1);
+    }
+
+    // 4. Add orphan panels (not connected to hierarchy) at the end
+    const sortedIds = sorted.map(s => s.data.id);
+    const orphans = panels.filter(p => !sortedIds.includes(p.id));
+    orphans.forEach(orphan => {
+      sorted.push({
+        type: 'orphan',
+        level: 99,
+        data: orphan
+      });
+    });
+
+    return sorted;
+  };
+
+  // Generate electrical systems report with hierarchy sorting
   const generateElectricalReport = () => {
     if (panels.length === 0 && transformers.length === 0) {
       return "No electrical equipment has been surveyed. Please add electrical panel or transformer information to complete this section.";
     }
 
-    // Simple default narrative - user will edit to add service details
+    const sortedEquipment = sortElectricalHierarchy(panels, transformers);
+
     let narrative = "Electrical Systems:\n\n";
 
-    // Add service paragraph (user will manually edit this)
-    narrative += "[Edit this section to add service information: The proposed space is served by a separately metered [SIZE]-amp, [VOLTAGE], [PHASE], [WIRE_CONFIG] [SOURCE_TYPE] located in [LOCATION].]\n\n";
+    // Service entrance paragraph (user must edit)
+    narrative += "[USER MUST EDIT: The proposed space is served by a separately metered [SIZE]-amp, [VOLTAGE], [PHASE], [WIRE_CONFIG] [SOURCE_TYPE] located in [LOCATION]. The service runs [ROUTING_DESCRIPTION] to ";
 
-    // Add transformer descriptions FIRST (if any)
-    if (transformers.length > 0) {
-      transformers.forEach((transformer, index) => {
-        const transformerData = extractTransformerData(transformer);
-        const designation = transformerData.transformerDesignation;
-        const kva = transformerData.powerRating;
-        const primary = transformerData.primaryVoltage;
-        const secondary = transformerData.secondaryVoltage;
-        const manufacturer = transformerData.manufacturer;
-        const location = transformerData.transformerLocation;
-        const condition = transformerData.condition;
-
-        narrative += `Power is supplied by a ${kva !== "Unknown" ? kva : "[kVA]"} ${primary !== "Unknown" ? primary : "[PRIMARY]"}/${secondary !== "Unknown" ? secondary : "[SECONDARY]"} transformer (${designation}) manufactured by ${manufacturer} located in ${location}. The transformer is in ${condition.toLowerCase()} condition.`;
-
-        if (index < transformers.length - 1) {
-          narrative += "\n\n";
-        }
-      });
-
-      narrative += "\n\n";
+    // Find first panel in hierarchy
+    const firstPanel = sortedEquipment.find(e => e.type === 'main' || e.type === 'distribution');
+    if (firstPanel) {
+      const panelData = extractPanelData(firstPanel.data);
+      narrative += `Panelboard "${panelData.panelDesignation}".]\n\n`;
+    } else {
+      narrative += `the electrical panel.]\n\n`;
     }
 
-    // Add panel descriptions (if any)
-    if (panels.length > 0) {
-      if (transformers.length > 0) {
-        narrative += "The service runs to the following panel(s):\n\n";
+    // Generate panel descriptions in hierarchy order
+    sortedEquipment.forEach((equipment, index) => {
+      const data = equipment.data;
+
+      if (equipment.type === 'transformer') {
+        const transformerData = extractTransformerData(data);
+        narrative += `Power is supplied by a ${transformerData.powerRating !== "Unknown" ? transformerData.powerRating : "[kVA]"} ${transformerData.primaryVoltage !== "Unknown" ? transformerData.primaryVoltage : "[PRIMARY]"}/${transformerData.secondaryVoltage !== "Unknown" ? transformerData.secondaryVoltage : "[SECONDARY]"} transformer (${transformerData.transformerDesignation}) manufactured by ${transformerData.manufacturer} located in ${transformerData.transformerLocation}. The transformer is in ${transformerData.condition.toLowerCase()} condition.\n\n`;
       }
 
-      panels.forEach((panel, index) => {
-        const panelData = extractPanelData(panel);
-        const designation = panelData.panelDesignation;
-        const busRating = panelData.busRating;
-        const voltage = panelData.voltage;
-        const phase = panelData.phase;
-        const mainBreaker = panelData.mainBreakerSize;
+      if (equipment.type === 'main' || equipment.type === 'distribution' || equipment.type === 'branch') {
+        const panelData = extractPanelData(data);
 
-        narrative += `${designation} is ${busRating !== "Unknown" ? "a " + busRating : "an unknown capacity"} ${voltage !== "Unknown" ? voltage : ""} ${phase !== "Unknown" ? phase : ""} panel`;
+        narrative += `Panelboard "${panelData.panelDesignation}" is a ${panelData.busRating !== "Unknown" ? panelData.busRating : "[BUS_RATING]"} ${panelData.voltage !== "Unknown" ? panelData.voltage : "[VOLTAGE]"} ${panelData.phase !== "Unknown" ? panelData.phase : "[PHASE]"} ${panelData.wireConfig || ''} panel`;
 
-        if (mainBreaker !== "MLO" && mainBreaker !== "Unknown") {
-          narrative += ` with a ${mainBreaker} main breaker`;
-        } else if (mainBreaker === "MLO") {
+        if (panelData.mainBreakerSize !== "MLO" && panelData.mainBreakerSize !== "Unknown") {
+          narrative += ` with a ${panelData.mainBreakerSize} main breaker`;
+        } else if (panelData.mainBreakerSize === "MLO") {
           narrative += ` with main lug only (MLO)`;
         }
 
-        narrative += `.${index < panels.length - 1 ? "\n\n" : ""}`;
-      });
-    }
+        // Check if this panel feeds others (has subfeed)
+        const childPanels = sortedEquipment.filter(e =>
+          e.data.data?.feedsFromPanel === panelData.panelDesignation
+        );
 
-    // Add condition assessment
-    const allGood =
-      panels.every(panel => {
-        const panelData = extractPanelData(panel);
-        return panelData.condition === "Good" && !panelData.isFPE && !panelData.isZinsco && !panelData.isChallenger;
-      }) &&
-      transformers.every(transformer => {
-        const transformerData = extractTransformerData(transformer);
-        return transformerData.condition === "Good";
-      });
+        if (childPanels.length > 0 && data.data?.subfeedBreakerSize) {
+          const childPanelData = extractPanelData(childPanels[0].data);
+          narrative += ` and a ${data.data.subfeedBreakerSize} subfeed breaker which serves Panelboard "${childPanelData.panelDesignation}"`;
+        }
 
-    const hasHazardous = panels.some(panel => {
-      const panelData = extractPanelData(panel);
-      return panelData.isFPE || panelData.isZinsco || panelData.isChallenger || panelData.condition === "Hazardous";
+        narrative += `.`;
+
+        // Add location context
+        if (panelData.panelLocation && panelData.panelLocation !== "Unknown Location") {
+          narrative += ` Located in ${panelData.panelLocation}.`;
+        }
+
+        narrative += `\n\n`;
+      }
     });
 
-    narrative += "\n\n";
+    // Condition assessment
+    const allGood = panels.every(p => {
+      const pd = extractPanelData(p);
+      return pd.condition === "Good" && !pd.isFPE && !pd.isZinsco && !pd.isChallenger;
+    }) && transformers.every(t => {
+      const td = extractTransformerData(t);
+      return td.condition === "Good";
+    });
+
+    const hasHazardous = panels.some(p => {
+      const pd = extractPanelData(p);
+      return pd.isFPE || pd.isZinsco || pd.isChallenger || pd.condition === "Hazardous";
+    });
+
     if (hasHazardous) {
-      narrative += "CRITICAL: One or more panels present serious safety hazards and require IMMEDIATE REPLACEMENT.";
+      narrative += "CRITICAL: One or more panels present serious safety hazards and require IMMEDIATE REPLACEMENT.\n\n";
     } else if (allGood) {
-      narrative += "All electrical equipment is in good condition and should be reused.";
+      narrative += "All electrical equipment is in good condition and should be reused.\n\n";
     } else {
-      narrative += "Some electrical equipment shows signs of wear and may require replacement or upgrade.";
+      narrative += "Some electrical equipment shows signs of wear and may require replacement or upgrade.\n\n";
     }
 
-    narrative += "\n\n[Add telephone service information here if applicable]";
+    narrative += "[USER ADDS: Telephone service information if applicable]";
 
     return narrative;
   };
@@ -1506,6 +1594,9 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                     Panel
                   </th>
                   <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    Hierarchy
+                  </th>
+                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
                     Manufacturer
                   </th>
                   <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
@@ -1529,7 +1620,10 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                 </tr>
               </thead>
               <tbody>
-                {panels.map((panel, index) => {
+                {sortElectricalHierarchy(panels, transformers)
+                  .filter(e => e.type !== 'transformer')  // Transformers have separate table
+                  .map((equipment, index) => {
+                  const panel = equipment.data;
                   const panelData = extractPanelData(panel);
                   const isEditingThisPanel = editingPanels[panel.id];
                   const isTempPanel = panel.id.startsWith('temp-');
@@ -1552,6 +1646,12 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                         ) : (
                           panelData.panelDesignation
                         )}
+                      </td>
+                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        {equipment.type === 'main' && '🔴 Main'}
+                        {equipment.type === 'distribution' && '🟡 Distribution'}
+                        {equipment.type === 'branch' && '🟢 Branch'}
+                        {equipment.type === 'orphan' && '⚪ Unlinked'}
                       </td>
                       <td style={{ border: "1px solid #ddd", padding: "10px" }}>
                         {isEditingThisPanel ? (
