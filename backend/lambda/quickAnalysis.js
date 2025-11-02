@@ -24,6 +24,8 @@ exports.handler = async (event) => {
     let body = JSON.parse(event.body);
     const { imageBase64, equipmentType } = body;
 
+    console.log(`Equipment type: ${equipmentType}`);
+
     // COMPREHENSIVE PROMPT WITH JSON-ONLY ENFORCEMENT AND SERIAL NUMBER DECODING
     const comprehensivePrompt = `You are an expert MEP engineer analyzing an HVAC equipment nameplate. Extract ALL visible information and return it in the exact JSON format below.
 
@@ -218,7 +220,416 @@ EXAMPLE FOR GOODMAN, Serial 1305123456:
 
 Extract all visible information now. Apply the serial number decoding rules based on the manufacturer you identify. RETURN ONLY JSON, NO OTHER TEXT.`;
 
-    console.log("Calling Claude with comprehensive prompt...");
+    // ELECTRICAL PANEL PROMPT - REALISTIC NAMEPLATE EXTRACTION ONLY
+    const electricalPanelPrompt = `You are an expert electrical engineer analyzing an electrical panel nameplate. Extract ONLY what is clearly visible on the nameplate - be realistic about what can be read from a photo.
+
+CRITICAL: Your response must be ONLY valid JSON with no additional text before or after. Do not include explanations, markdown code blocks, or any other text. Start your response with { and end with }.
+
+CRITICAL INSTRUCTIONS:
+1. Extract ONLY information visible on the nameplate - most panels show limited information
+2. For fields not visible on nameplate: use "Not Available"
+3. For fields that are worn/damaged/illegible: use "Not legible"
+4. NEVER leave any field as null - always use either the actual value, "Not legible", or "Not Available"
+5. Be realistic - most panel nameplates only show: manufacturer, model, voltage, bus rating, and sometimes main breaker size
+6. Physical dimensions (width, depth, height) typically require field measurement - use "Not Available" unless clearly labeled
+7. Pole spaces require counting and are often not visible - use "Not Available" unless clearly visible
+8. Advanced ratings (fault current, series rating, AIC) are rarely on nameplates - use "Not Available" unless clearly visible
+
+SAFETY WARNINGS - CRITICAL:
+- Federal Pacific Electric (FPE): Known fire hazard, IMMEDIATE REPLACEMENT REQUIRED
+- Zinsco / GTE-Sylvania: Known fire hazard, IMMEDIATE REPLACEMENT REQUIRED
+- Challenger: Fire safety concerns, recommend replacement
+- Set appropriate warning flags if these manufacturers are detected
+
+VOLTAGE CONFIGURATION IDENTIFICATION:
+Common formats you may see:
+- "208Y/120V 3Ø 4W" = 208Y/120V 3-phase 4-wire
+- "480Y/277V 3Ø 4W" = 480Y/277V 3-phase 4-wire
+- "120/240V 1Ø 3W" = 120/240V 1-phase 3-wire
+- "240Δ/120V 3Ø 4W" = 240D/120V 3-phase 4-wire
+
+REALISTICALLY EXTRACTABLE FROM NAMEPLATE PHOTO:
+✓ Manufacturer name
+✓ Model number
+✓ Serial number (sometimes)
+✓ Voltage configuration (e.g., 120/208V)
+✓ Phase (1-phase or 3-phase)
+✓ Bus rating (e.g., 400A)
+✓ Main breaker size if visible
+✗ Physical dimensions (need measurement)
+✗ Exact pole space count (need counting, often illegible)
+✗ Fault current ratings (rarely on nameplate)
+✗ Panel schedule details (too small to read)
+✗ Individual circuit information
+
+RETURN THIS EXACT JSON STRUCTURE (NO OTHER TEXT):
+{
+  "systemType": {
+    "category": "Electrical Distribution Panel",
+    "panelType": "Load Center" or "Panelboard" or "Main Distribution Panel" or "Switchboard" or "Not Available",
+    "confidence": "high" or "medium" or "low"
+  },
+  "basicInfo": {
+    "manufacturer": "string or 'Not legible' or 'Not Available'",
+    "model": "string or 'Not legible' or 'Not Available'",
+    "serialNumber": "string or 'Not legible' or 'Not Available'",
+    "poleSpaces": "number as string or 'Not Available' - only if clearly visible",
+    "condition": "based on panel condition - Good/Fair/Poor/Hazardous or 'Not Available'",
+    "confidence": "high" or "medium" or "low"
+  },
+  "electrical": {
+    "voltage": "string (e.g., '120/208V', '480Y/277V') or 'Not legible' or 'Not Available'",
+    "phase": "1-phase" or "3-phase" or "Not legible" or "Not Available'",
+    "wireConfig": "4-wire" or "3-wire" or "Not legible" or "Not Available'",
+    "busRating": "string with A (e.g., '400A', '225A') or 'Not legible' or 'Not Available'",
+    "availableFaultCurrent": "string or 'Not Available' - rarely visible on nameplate",
+    "seriesRatedCombination": "string or 'Not Available' - rarely visible",
+    "lowestBreakerAIC": "string or 'Not Available' - rarely visible",
+    "confidence": "high" or "medium" or "low"
+  },
+  "incomingTermination": {
+    "type": "Breaker Main" or "Main Lug Only" or "Not Available",
+    "mainBreakerSize": "string with A (e.g., '400A') or 'Not Available' - only if main breaker visible",
+    "mainBreakerPoles": "1" or "2" or "3" or "Not Available",
+    "confidence": "high" or "medium" or "low"
+  },
+  "mounting": {
+    "type": "Surface" or "Flush" or "Semi-Flush" or "Within Switchboard" or "Not Available",
+    "confidence": "low" - usually cannot determine from nameplate alone
+  },
+  "physicalDimensions": {
+    "width": "Not Available - requires field measurement",
+    "depth": "Not Available - requires field measurement",
+    "height": "Not Available - requires field measurement",
+    "note": "Physical dimensions typically require field measurement and are not on nameplates"
+  },
+  "safetyWarnings": {
+    "isFPE": true or false,
+    "isZinsco": true or false,
+    "isChallenger": true or false,
+    "warnings": [
+      "array of safety warnings - include IMMEDIATE REPLACEMENT REQUIRED for FPE/Zinsco"
+    ]
+  },
+  "warnings": [
+    "list any illegible fields, critical issues, or safety concerns"
+  ],
+  "overallConfidence": "high" or "medium" or "low"
+}
+
+EXAMPLE OUTPUT FOR SQUARE D PANEL:
+{
+  "systemType": {
+    "category": "Electrical Distribution Panel",
+    "panelType": "Load Center",
+    "confidence": "high"
+  },
+  "basicInfo": {
+    "manufacturer": "Square D",
+    "model": "NQOD442L225G",
+    "serialNumber": "Not legible",
+    "poleSpaces": "42",
+    "condition": "Good",
+    "confidence": "high"
+  },
+  "electrical": {
+    "voltage": "120/208V",
+    "phase": "3-phase",
+    "wireConfig": "4-wire",
+    "busRating": "400A",
+    "availableFaultCurrent": "Not Available",
+    "seriesRatedCombination": "Not Available",
+    "lowestBreakerAIC": "Not Available",
+    "confidence": "high"
+  },
+  "incomingTermination": {
+    "type": "Breaker Main",
+    "mainBreakerSize": "400A",
+    "mainBreakerPoles": "3",
+    "confidence": "high"
+  },
+  "mounting": {
+    "type": "Surface",
+    "confidence": "low"
+  },
+  "physicalDimensions": {
+    "width": "Not Available - requires field measurement",
+    "depth": "Not Available - requires field measurement",
+    "height": "Not Available - requires field measurement",
+    "note": "Physical dimensions typically require field measurement and are not on nameplates"
+  },
+  "safetyWarnings": {
+    "isFPE": false,
+    "isZinsco": false,
+    "isChallenger": false,
+    "warnings": []
+  },
+  "warnings": [
+    "Serial number not legible due to wear",
+    "Advanced electrical ratings not visible on nameplate"
+  ],
+  "overallConfidence": "medium"
+}
+
+EXAMPLE OUTPUT FOR FPE PANEL (HAZARDOUS):
+{
+  "systemType": {
+    "category": "Electrical Distribution Panel",
+    "panelType": "Load Center",
+    "confidence": "high"
+  },
+  "basicInfo": {
+    "manufacturer": "Federal Pacific Electric",
+    "model": "Not legible",
+    "serialNumber": "Not legible",
+    "poleSpaces": "Not Available",
+    "condition": "Hazardous",
+    "confidence": "high"
+  },
+  "electrical": {
+    "voltage": "120/240V",
+    "phase": "1-phase",
+    "wireConfig": "3-wire",
+    "busRating": "200A",
+    "availableFaultCurrent": "Not Available",
+    "seriesRatedCombination": "Not Available",
+    "lowestBreakerAIC": "Not Available",
+    "confidence": "medium"
+  },
+  "incomingTermination": {
+    "type": "Breaker Main",
+    "mainBreakerSize": "200A",
+    "mainBreakerPoles": "2",
+    "confidence": "medium"
+  },
+  "mounting": {
+    "type": "Not Available",
+    "confidence": "low"
+  },
+  "physicalDimensions": {
+    "width": "Not Available - requires field measurement",
+    "depth": "Not Available - requires field measurement",
+    "height": "Not Available - requires field measurement",
+    "note": "Physical dimensions typically require field measurement and are not on nameplates"
+  },
+  "safetyWarnings": {
+    "isFPE": true,
+    "isZinsco": false,
+    "isChallenger": false,
+    "warnings": [
+      "FEDERAL PACIFIC ELECTRIC PANEL DETECTED - IMMEDIATE REPLACEMENT REQUIRED",
+      "FPE panels have documented fire hazards and breaker failures",
+      "This panel poses a serious safety risk and should be replaced immediately"
+    ]
+  },
+  "warnings": [
+    "FEDERAL PACIFIC ELECTRIC PANEL - IMMEDIATE REPLACEMENT REQUIRED",
+    "Model and serial numbers not legible",
+    "This is a known fire hazard"
+  ],
+  "overallConfidence": "medium"
+}
+
+Extract all visible information from the electrical panel nameplate. Be realistic about what can be seen in a photo. RETURN ONLY JSON, NO OTHER TEXT.`;
+
+    // TRANSFORMER PROMPT - REALISTIC NAMEPLATE EXTRACTION ONLY
+    const transformerPrompt = `You are an expert electrical engineer analyzing a transformer nameplate. Extract ONLY what is clearly visible on the nameplate - be realistic about what can be read from a photo.
+
+CRITICAL: Your response must be ONLY valid JSON with no additional text before or after. Do not include explanations, markdown code blocks, or any other text. Start your response with { and end with }.
+
+CRITICAL INSTRUCTIONS:
+1. Extract ONLY information visible on the nameplate - most transformers show kVA, voltages, and manufacturer
+2. For fields not visible on nameplate: use "Not Available"
+3. For fields that are worn/damaged/illegible: use "Not legible"
+4. NEVER leave any field as null - always use either the actual value, "Not legible", or "Not Available"
+5. Be realistic - most transformer nameplates show: manufacturer, model, kVA, primary voltage, secondary voltage, phase
+6. Physical dimensions (width, depth, height, weight) typically require field measurement - use "Not Available" unless clearly labeled
+7. Detailed ratings (impedance, insulation, temperature rise) are often small print - use "Not Available" unless clearly visible
+8. Wiring details require field observation - always use "Not Available"
+
+VOLTAGE CONFIGURATION IDENTIFICATION:
+Common transformer voltage formats:
+- "208Y/120V" = 208Y/120V (wye configuration)
+- "480Y/277V" = 480Y/277V (wye configuration)
+- "240D/120V" = 240D/120V (delta configuration)
+- "480V" = 480V (primary voltage)
+- "600D" = 600D (delta configuration)
+- "120/240V" = 120/240V (single phase)
+
+REALISTICALLY EXTRACTABLE FROM TRANSFORMER NAMEPLATE PHOTO:
+✓ Manufacturer name
+✓ Model number
+✓ Serial number (sometimes)
+✓ kVA rating (power rating)
+✓ Primary voltage (e.g., 480V, 600V)
+✓ Secondary voltage (e.g., 208Y/120V, 480Y/277V)
+✓ Phase (single phase or three phase)
+✓ Transformer type (Dry Type, Oil Filled, Pad Mounted)
+✗ Physical dimensions (width, depth, height, weight - need measurement)
+✗ Impedance rating (often small print)
+✗ Insulation rating (often small print)
+✗ Temperature rise (often small print)
+✗ Wiring details (need field observation)
+✗ Required clearances (need field measurement)
+
+RETURN THIS EXACT JSON STRUCTURE (NO OTHER TEXT):
+{
+  "systemType": {
+    "category": "Electrical Transformer",
+    "transformerType": "Dry Type" or "Oil Filled" or "Pad Mounted" or "Cast Coil" or "Not Available",
+    "confidence": "high" or "medium" or "low"
+  },
+  "basicInfo": {
+    "manufacturer": "string or 'Not legible' or 'Not Available'",
+    "model": "string or 'Not legible' or 'Not Available'",
+    "serialNumber": "string or 'Not legible' or 'Not Available'",
+    "phase": "Three Phase" or "Single Phase" or "Not legible" or "Not Available",
+    "confidence": "high" or "medium" or "low"
+  },
+  "electrical": {
+    "powerRating": "string with kVA (e.g., '75 kVA', '150 kVA') or 'Not legible' or 'Not Available'",
+    "primaryVoltage": "string (e.g., '480V', '600V', '240V') or 'Not legible' or 'Not Available'",
+    "secondaryVoltage": "string (e.g., '208Y/120V', '480Y/277V', '120/240V') or 'Not legible' or 'Not Available'",
+    "impedance": "string with % (e.g., '3.5%') or 'Not Available' - often small print",
+    "insulationRating": "string with °C (e.g., '150°C') or 'Not Available' - often small print",
+    "temperatureRise": "string with °C (e.g., '80°C') or 'Not Available' - often small print",
+    "confidence": "high" or "medium" or "low"
+  },
+  "mounting": {
+    "type": "Floor" or "Suspended" or "Wall" or "Pad" or "Not Available",
+    "confidence": "low" - usually cannot determine from nameplate alone
+  },
+  "physicalDimensions": {
+    "width": "Not Available - requires field measurement",
+    "depth": "Not Available - requires field measurement",
+    "height": "Not Available - requires field measurement",
+    "weight": "string with lbs or 'Not Available' - rarely visible",
+    "note": "Physical dimensions typically require field measurement and are not always on nameplates"
+  },
+  "wiringDetails": {
+    "note": "Wiring details require field observation and cannot be determined from nameplate photo",
+    "primaries": "Not Available - requires field observation",
+    "secondaries": "Not Available - requires field observation",
+    "wireMaterial": "Not Available - requires field observation",
+    "wireSize": "Not Available - requires field observation",
+    "conduitSize": "Not Available - requires field observation"
+  },
+  "warnings": [
+    "list any illegible fields or critical issues - no safety warnings needed for transformers unless obvious damage visible"
+  ],
+  "overallConfidence": "high" or "medium" or "low"
+}
+
+EXAMPLE OUTPUT FOR SQUARE D DRY TYPE TRANSFORMER:
+{
+  "systemType": {
+    "category": "Electrical Transformer",
+    "transformerType": "Dry Type",
+    "confidence": "high"
+  },
+  "basicInfo": {
+    "manufacturer": "Square D",
+    "model": "EE75T3H",
+    "serialNumber": "1234567890",
+    "phase": "Three Phase",
+    "confidence": "high"
+  },
+  "electrical": {
+    "powerRating": "75 kVA",
+    "primaryVoltage": "480V",
+    "secondaryVoltage": "208Y/120V",
+    "impedance": "3.5%",
+    "insulationRating": "150°C",
+    "temperatureRise": "80°C",
+    "confidence": "high"
+  },
+  "mounting": {
+    "type": "Floor",
+    "confidence": "low"
+  },
+  "physicalDimensions": {
+    "width": "Not Available - requires field measurement",
+    "depth": "Not Available - requires field measurement",
+    "height": "Not Available - requires field measurement",
+    "weight": "850 lbs",
+    "note": "Physical dimensions typically require field measurement and are not always on nameplates"
+  },
+  "wiringDetails": {
+    "note": "Wiring details require field observation and cannot be determined from nameplate photo",
+    "primaries": "Not Available - requires field observation",
+    "secondaries": "Not Available - requires field observation",
+    "wireMaterial": "Not Available - requires field observation",
+    "wireSize": "Not Available - requires field observation",
+    "conduitSize": "Not Available - requires field observation"
+  },
+  "warnings": [
+    "Impedance and temperature ratings are small print - verify in field if needed"
+  ],
+  "overallConfidence": "high"
+}
+
+EXAMPLE OUTPUT FOR GENERAL ELECTRIC TRANSFORMER WITH LIMITED INFO:
+{
+  "systemType": {
+    "category": "Electrical Transformer",
+    "transformerType": "Dry Type",
+    "confidence": "high"
+  },
+  "basicInfo": {
+    "manufacturer": "General Electric",
+    "model": "9T23B3873",
+    "serialNumber": "Not legible",
+    "phase": "Three Phase",
+    "confidence": "high"
+  },
+  "electrical": {
+    "powerRating": "45 kVA",
+    "primaryVoltage": "480V",
+    "secondaryVoltage": "120/240V",
+    "impedance": "Not Available",
+    "insulationRating": "Not Available",
+    "temperatureRise": "Not Available",
+    "confidence": "medium"
+  },
+  "mounting": {
+    "type": "Not Available",
+    "confidence": "low"
+  },
+  "physicalDimensions": {
+    "width": "Not Available - requires field measurement",
+    "depth": "Not Available - requires field measurement",
+    "height": "Not Available - requires field measurement",
+    "weight": "Not Available",
+    "note": "Physical dimensions typically require field measurement and are not always on nameplates"
+  },
+  "wiringDetails": {
+    "note": "Wiring details require field observation and cannot be determined from nameplate photo",
+    "primaries": "Not Available - requires field observation",
+    "secondaries": "Not Available - requires field observation",
+    "wireMaterial": "Not Available - requires field observation",
+    "wireSize": "Not Available - requires field observation",
+    "conduitSize": "Not Available - requires field observation"
+  },
+  "warnings": [
+    "Serial number not legible due to wear",
+    "Detailed electrical ratings not visible on nameplate - verify in field"
+  ],
+  "overallConfidence": "medium"
+}
+
+Extract all visible information from the transformer nameplate. Be realistic about what can be seen in a photo. Focus on kVA, voltages, and phase - these are the critical specs. RETURN ONLY JSON, NO OTHER TEXT.`;
+
+    // Select the appropriate prompt based on equipment type
+    let selectedPrompt;
+    if (equipmentType === 'electrical') {
+      selectedPrompt = electricalPanelPrompt;
+    } else if (equipmentType === 'transformer') {
+      selectedPrompt = transformerPrompt;
+    } else {
+      selectedPrompt = comprehensivePrompt;
+    }
+
+    console.log(`Calling Claude with ${equipmentType} analysis prompt...`);
 
     const content = [];
 
@@ -230,7 +641,7 @@ Extract all visible information now. Apply the serial number decoding rules base
     } else {
       content.push({
         type: "text",
-        text: comprehensivePrompt,
+        text: selectedPrompt,
       });
       content.push({
         type: "image",

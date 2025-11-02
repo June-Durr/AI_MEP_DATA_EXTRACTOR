@@ -1,11 +1,17 @@
 // frontend/src/components/ReportGenerator.js - Enhanced for Live Preview with Editing
 import React, { useState, useEffect } from "react";
 
-const ReportGenerator = ({ project, squareFootage, isLivePreview = false, currentExtractedData = null, currentRTUNumber = null, currentUserInputs = null }) => {
+const ReportGenerator = ({ project, squareFootage, isLivePreview = false, currentExtractedData = null, currentRTUNumber = null, currentPanelNumber = null, currentTransformerNumber = null, currentUserInputs = null, equipmentType = "hvac", currentEquipmentSubtype = null }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedReport, setEditedReport] = useState("");
   const [editingRTUs, setEditingRTUs] = useState({}); // Track which RTUs are being edited
   const [editedRTUData, setEditedRTUData] = useState({}); // Store edited RTU data
+  const [isEditingElectrical, setIsEditingElectrical] = useState(false);
+  const [editedElectricalReport, setEditedElectricalReport] = useState("");
+  const [editingPanels, setEditingPanels] = useState({}); // Track which panels are being edited
+  const [editedPanelData, setEditedPanelData] = useState({}); // Store edited panel data
+  const [editingTransformers, setEditingTransformers] = useState({}); // Track which transformers are being edited
+  const [editedTransformerData, setEditedTransformerData] = useState({}); // Store edited transformer data
 
   // Track only when editing state changes
   useEffect(() => {
@@ -17,13 +23,15 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
   }, [editingRTUs, editedRTUData]);
 
   // Early return must come after all hooks to comply with Rules of Hooks
-  // Memoize savedRTUs to prevent unnecessary re-renders
+  // Memoize saved data to prevent unnecessary re-renders
   const savedRTUs = React.useMemo(() => project?.rtus || [], [project?.rtus]);
+  const savedPanels = React.useMemo(() => project?.electricalPanels || [], [project?.electricalPanels]);
+  const savedTransformers = React.useMemo(() => project?.transformers || [], [project?.transformers]);
 
-  // If we have current extracted data, create a temporary RTU object and add it to the list
+  // If we have current extracted data, create a temporary RTU/Panel object and add it to the list
   // Use useMemo to prevent creating new objects on every render
   const rtus = React.useMemo(() => {
-    if (currentExtractedData) {
+    if (equipmentType === "hvac" && currentExtractedData) {
       return [
         ...savedRTUs,
         {
@@ -39,9 +47,49 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       ];
     }
     return savedRTUs;
-  }, [savedRTUs, currentExtractedData, currentRTUNumber, currentUserInputs]);
+  }, [savedRTUs, currentExtractedData, currentRTUNumber, currentUserInputs, equipmentType]);
+
+  const panels = React.useMemo(() => {
+    if (equipmentType === "electrical" && currentEquipmentSubtype === "panel" && currentExtractedData) {
+      return [
+        ...savedPanels,
+        {
+          id: `temp-${currentPanelNumber}`,
+          number: currentPanelNumber,
+          data: {
+            ...currentExtractedData,
+            panelDesignation: currentUserInputs?.panelDesignation || "",
+            panelLocation: currentUserInputs?.panelLocation || "",
+            condition: currentUserInputs?.condition || "Good",
+          }
+        }
+      ];
+    }
+    return savedPanels;
+  }, [savedPanels, currentExtractedData, currentPanelNumber, currentUserInputs, equipmentType, currentEquipmentSubtype]);
+
+  const transformers = React.useMemo(() => {
+    if (equipmentType === "electrical" && currentEquipmentSubtype === "transformer" && currentExtractedData) {
+      return [
+        ...savedTransformers,
+        {
+          id: `temp-${currentTransformerNumber}`,
+          number: currentTransformerNumber,
+          data: {
+            ...currentExtractedData,
+            transformerDesignation: currentUserInputs?.panelDesignation || "", // Using panelDesignation field
+            transformerLocation: currentUserInputs?.panelLocation || "", // Using panelLocation field
+            condition: currentUserInputs?.condition || "Good",
+          }
+        }
+      ];
+    }
+    return savedTransformers;
+  }, [savedTransformers, currentExtractedData, currentTransformerNumber, currentUserInputs, equipmentType, currentEquipmentSubtype]);
 
   const rtuCount = rtus.length;
+  const panelCount = panels.length;
+  const transformerCount = transformers.length;
 
   // Helper to safely extract data from nested structure
   // If the RTU has been edited, use the edited data
@@ -71,6 +119,54 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
         data.serviceLife?.recommendation || data.recommendation || "",
       heatType: data.heatType || "Unknown",
       gasPipeSize: data.gasPipeSize || null,
+    };
+  };
+
+  // Helper to safely extract data from electrical panel
+  const extractPanelData = (panel) => {
+    // Check if we have edited data for this panel
+    if (editedPanelData[panel.id]) {
+      return editedPanelData[panel.id];
+    }
+
+    const data = panel.data || {};
+
+    return {
+      panelDesignation: data.panelDesignation || "Panel",
+      panelLocation: data.panelLocation || "Unknown Location",
+      manufacturer: data.basicInfo?.manufacturer || "Unknown",
+      model: data.basicInfo?.model || "Unknown",
+      voltage: data.electrical?.voltage || "Unknown",
+      phase: data.electrical?.phase || "Unknown",
+      busRating: data.electrical?.busRating || "Unknown",
+      mainBreakerSize: data.incomingTermination?.mainBreakerSize || "MLO",
+      condition: data.condition || "Unknown",
+      isFPE: data.safetyWarnings?.isFPE || false,
+      isZinsco: data.safetyWarnings?.isZinsco || false,
+      isChallenger: data.safetyWarnings?.isChallenger || false,
+    };
+  };
+
+  // Helper to safely extract data from transformer
+  const extractTransformerData = (transformer) => {
+    // Check if we have edited data for this transformer
+    if (editedTransformerData[transformer.id]) {
+      return editedTransformerData[transformer.id];
+    }
+
+    const data = transformer.data || {};
+
+    return {
+      transformerDesignation: data.transformerDesignation || "Transformer",
+      transformerLocation: data.transformerLocation || "Unknown Location",
+      manufacturer: data.basicInfo?.manufacturer || "Unknown",
+      model: data.basicInfo?.model || "Unknown",
+      phase: data.basicInfo?.phase || "Unknown",
+      powerRating: data.electrical?.powerRating || "Unknown",
+      primaryVoltage: data.electrical?.primaryVoltage || "Unknown",
+      secondaryVoltage: data.electrical?.secondaryVoltage || "Unknown",
+      transformerType: data.systemType?.transformerType || "Unknown",
+      condition: data.condition || "Unknown",
     };
   };
 
@@ -230,10 +326,107 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       : ""
   } The majority of ductwork in the space is interior insulated rectangular sheet metal ductwork with insulated flexible diffuser connections.`;
 
+  // Generate electrical systems report
+  const generateElectricalReport = () => {
+    if (panels.length === 0 && transformers.length === 0) {
+      return "No electrical equipment has been surveyed. Please add electrical panel or transformer information to complete this section.";
+    }
+
+    // Simple default narrative - user will edit to add service details
+    let narrative = "Electrical Systems:\n\n";
+
+    // Add service paragraph (user will manually edit this)
+    narrative += "[Edit this section to add service information: The proposed space is served by a separately metered [SIZE]-amp, [VOLTAGE], [PHASE], [WIRE_CONFIG] [SOURCE_TYPE] located in [LOCATION].]\n\n";
+
+    // Add transformer descriptions FIRST (if any)
+    if (transformers.length > 0) {
+      transformers.forEach((transformer, index) => {
+        const transformerData = extractTransformerData(transformer);
+        const designation = transformerData.transformerDesignation;
+        const kva = transformerData.powerRating;
+        const primary = transformerData.primaryVoltage;
+        const secondary = transformerData.secondaryVoltage;
+        const manufacturer = transformerData.manufacturer;
+        const location = transformerData.transformerLocation;
+        const condition = transformerData.condition;
+
+        narrative += `Power is supplied by a ${kva !== "Unknown" ? kva : "[kVA]"} ${primary !== "Unknown" ? primary : "[PRIMARY]"}/${secondary !== "Unknown" ? secondary : "[SECONDARY]"} transformer (${designation}) manufactured by ${manufacturer} located in ${location}. The transformer is in ${condition.toLowerCase()} condition.`;
+
+        if (index < transformers.length - 1) {
+          narrative += "\n\n";
+        }
+      });
+
+      narrative += "\n\n";
+    }
+
+    // Add panel descriptions (if any)
+    if (panels.length > 0) {
+      if (transformers.length > 0) {
+        narrative += "The service runs to the following panel(s):\n\n";
+      }
+
+      panels.forEach((panel, index) => {
+        const panelData = extractPanelData(panel);
+        const designation = panelData.panelDesignation;
+        const busRating = panelData.busRating;
+        const voltage = panelData.voltage;
+        const phase = panelData.phase;
+        const mainBreaker = panelData.mainBreakerSize;
+
+        narrative += `${designation} is ${busRating !== "Unknown" ? "a " + busRating : "an unknown capacity"} ${voltage !== "Unknown" ? voltage : ""} ${phase !== "Unknown" ? phase : ""} panel`;
+
+        if (mainBreaker !== "MLO" && mainBreaker !== "Unknown") {
+          narrative += ` with a ${mainBreaker} main breaker`;
+        } else if (mainBreaker === "MLO") {
+          narrative += ` with main lug only (MLO)`;
+        }
+
+        narrative += `.${index < panels.length - 1 ? "\n\n" : ""}`;
+      });
+    }
+
+    // Add condition assessment
+    const allGood =
+      panels.every(panel => {
+        const panelData = extractPanelData(panel);
+        return panelData.condition === "Good" && !panelData.isFPE && !panelData.isZinsco && !panelData.isChallenger;
+      }) &&
+      transformers.every(transformer => {
+        const transformerData = extractTransformerData(transformer);
+        return transformerData.condition === "Good";
+      });
+
+    const hasHazardous = panels.some(panel => {
+      const panelData = extractPanelData(panel);
+      return panelData.isFPE || panelData.isZinsco || panelData.isChallenger || panelData.condition === "Hazardous";
+    });
+
+    narrative += "\n\n";
+    if (hasHazardous) {
+      narrative += "CRITICAL: One or more panels present serious safety hazards and require IMMEDIATE REPLACEMENT.";
+    } else if (allGood) {
+      narrative += "All electrical equipment is in good condition and should be reused.";
+    } else {
+      narrative += "Some electrical equipment shows signs of wear and may require replacement or upgrade.";
+    }
+
+    narrative += "\n\n[Add telephone service information here if applicable]";
+
+    return narrative;
+  };
+
+  const electricalSystemsReport = generateElectricalReport();
+
   // Update edited report when mechanicalSystemsReport changes (new RTUs added or edited)
   useEffect(() => {
     setEditedReport(mechanicalSystemsReport);
   }, [mechanicalSystemsReport, editedRTUData]);
+
+  // Update edited electrical report when electricalSystemsReport changes
+  useEffect(() => {
+    setEditedElectricalReport(electricalSystemsReport);
+  }, [electricalSystemsReport, editedPanelData]);
 
   // Handle RTU editing
   const startEditingRTU = (rtuId) => {
@@ -374,12 +567,222 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
     });
   };
 
+  // Handle Panel editing
+  const startEditingPanel = (panelId) => {
+    const panel = panels.find(p => p.id === panelId);
+    if (panel) {
+      const panelData = extractPanelData(panel);
+      setEditedPanelData((prev) => ({ ...prev, [panelId]: panelData }));
+      setEditingPanels((prev) => ({ ...prev, [panelId]: true }));
+    }
+  };
+
+  const updatePanelField = (panelId, field, value) => {
+    setEditedPanelData((prev) => ({
+      ...prev,
+      [panelId]: {
+        ...(prev[panelId] || {}),
+        [field]: value
+      }
+    }));
+  };
+
+  const savePanelEdit = (panelId) => {
+    // Handle temp panels (live preview) - just update local state
+    if (panelId.startsWith('temp-')) {
+      setEditingPanels((prev) => ({ ...prev, [panelId]: false }));
+      return;
+    }
+
+    try {
+      const savedProjects = localStorage.getItem("mep-survey-projects");
+      if (!savedProjects) {
+        alert("Error: No projects found in storage");
+        return;
+      }
+
+      const projects = JSON.parse(savedProjects);
+      const projectIndex = projects.findIndex((p) => p.id === project.id);
+
+      if (projectIndex === -1) {
+        alert("Error: Project not found");
+        return;
+      }
+
+      const panelIndex = projects[projectIndex].electricalPanels.findIndex((p) => p.id === panelId);
+      if (panelIndex === -1) {
+        alert("Error: Panel not found");
+        return;
+      }
+
+      const updatedData = editedPanelData[panelId];
+      if (!updatedData) {
+        alert("Error: No edited data found for this panel");
+        setEditingPanels((prev) => ({ ...prev, [panelId]: false }));
+        return;
+      }
+
+      const originalPanel = projects[projectIndex].electricalPanels[panelIndex];
+
+      // Preserve ALL original data, only update specific fields
+      const updatedPanel = {
+        ...originalPanel,
+        data: {
+          ...originalPanel.data,
+          panelDesignation: updatedData.panelDesignation,
+          panelLocation: updatedData.panelLocation,
+          condition: updatedData.condition,
+          basicInfo: {
+            ...(originalPanel.data?.basicInfo || {}),
+            manufacturer: updatedData.manufacturer,
+            model: updatedData.model,
+          },
+          electrical: {
+            ...(originalPanel.data?.electrical || {}),
+            voltage: updatedData.voltage,
+            busRating: updatedData.busRating,
+          },
+          incomingTermination: {
+            ...(originalPanel.data?.incomingTermination || {}),
+            mainBreakerSize: updatedData.mainBreakerSize,
+          },
+        },
+      };
+
+      projects[projectIndex].electricalPanels[panelIndex] = updatedPanel;
+      projects[projectIndex].lastModified = new Date().toISOString();
+
+      localStorage.setItem("mep-survey-projects", JSON.stringify(projects));
+
+      setEditingPanels((prev) => ({ ...prev, [panelId]: false }));
+
+      alert("Panel saved successfully! The page will now reload to show your changes.");
+      window.location.reload();
+    } catch (error) {
+      console.error("Error saving panel edit:", error);
+      alert(`Error saving panel: ${error.message}`);
+    }
+  };
+
+  const cancelPanelEdit = (panelId) => {
+    setEditingPanels((prev) => ({ ...prev, [panelId]: false }));
+    setEditedPanelData((prev) => {
+      const newData = { ...prev };
+      delete newData[panelId];
+      return newData;
+    });
+  };
+
+  // Handle Transformer editing
+  const startEditingTransformer = (transformerId) => {
+    const transformer = transformers.find(t => t.id === transformerId);
+    if (transformer) {
+      const transformerData = extractTransformerData(transformer);
+      setEditedTransformerData((prev) => ({ ...prev, [transformerId]: transformerData }));
+      setEditingTransformers((prev) => ({ ...prev, [transformerId]: true }));
+    }
+  };
+
+  const updateTransformerField = (transformerId, field, value) => {
+    setEditedTransformerData((prev) => ({
+      ...prev,
+      [transformerId]: {
+        ...(prev[transformerId] || {}),
+        [field]: value
+      }
+    }));
+  };
+
+  const saveTransformerEdit = (transformerId) => {
+    // Handle temp transformers (live preview) - just update local state
+    if (transformerId.startsWith('temp-')) {
+      setEditingTransformers((prev) => ({ ...prev, [transformerId]: false }));
+      return;
+    }
+
+    try {
+      const savedProjects = localStorage.getItem("mep-survey-projects");
+      if (!savedProjects) {
+        alert("Error: No projects found in storage");
+        return;
+      }
+
+      const projects = JSON.parse(savedProjects);
+      const projectIndex = projects.findIndex((p) => p.id === project.id);
+
+      if (projectIndex === -1) {
+        alert("Error: Project not found");
+        return;
+      }
+
+      const transformerIndex = projects[projectIndex].transformers.findIndex((t) => t.id === transformerId);
+      if (transformerIndex === -1) {
+        alert("Error: Transformer not found");
+        return;
+      }
+
+      const updatedData = editedTransformerData[transformerId];
+      if (!updatedData) {
+        alert("Error: No edited data found for this transformer");
+        setEditingTransformers((prev) => ({ ...prev, [transformerId]: false }));
+        return;
+      }
+
+      const originalTransformer = projects[projectIndex].transformers[transformerIndex];
+
+      // Preserve ALL original data, only update specific fields
+      const updatedTransformer = {
+        ...originalTransformer,
+        data: {
+          ...originalTransformer.data,
+          transformerDesignation: updatedData.transformerDesignation,
+          transformerLocation: updatedData.transformerLocation,
+          condition: updatedData.condition,
+          basicInfo: {
+            ...(originalTransformer.data?.basicInfo || {}),
+            manufacturer: updatedData.manufacturer,
+            model: updatedData.model,
+            phase: updatedData.phase,
+          },
+          electrical: {
+            ...(originalTransformer.data?.electrical || {}),
+            powerRating: updatedData.powerRating,
+            primaryVoltage: updatedData.primaryVoltage,
+            secondaryVoltage: updatedData.secondaryVoltage,
+          },
+        },
+      };
+
+      projects[projectIndex].transformers[transformerIndex] = updatedTransformer;
+      projects[projectIndex].lastModified = new Date().toISOString();
+
+      localStorage.setItem("mep-survey-projects", JSON.stringify(projects));
+
+      setEditingTransformers((prev) => ({ ...prev, [transformerId]: false }));
+
+      alert("Transformer saved successfully! The page will now reload to show your changes.");
+      window.location.reload();
+    } catch (error) {
+      console.error("Error saving transformer edit:", error);
+      alert(`Error saving transformer: ${error.message}`);
+    }
+  };
+
+  const cancelTransformerEdit = (transformerId) => {
+    setEditingTransformers((prev) => ({ ...prev, [transformerId]: false }));
+    setEditedTransformerData((prev) => {
+      const newData = { ...prev };
+      delete newData[transformerId];
+      return newData;
+    });
+  };
+
   // Early return after all hooks to comply with Rules of Hooks
-  if (!project || (rtus.length === 0 && !currentExtractedData)) {
+  if (!project || (rtus.length === 0 && panels.length === 0 && transformers.length === 0 && !currentExtractedData)) {
     return (
       <div className="card" style={{ padding: "40px", textAlign: "center" }}>
-        <h3>No RTUs to Report</h3>
-        <p>Capture RTU nameplates to generate the report.</p>
+        <h3>No Equipment to Report</h3>
+        <p>Capture equipment nameplates to generate the report.</p>
       </div>
     );
   }
@@ -390,7 +793,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       {isLivePreview && (
         <div
           style={{
-            backgroundColor: "#28a745",
+            backgroundColor: equipmentType === "electrical" ? "#28a745" : "#007bff",
             color: "white",
             padding: "10px 20px",
             borderRadius: "8px",
@@ -399,8 +802,10 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
             fontWeight: "bold",
           }}
         >
-          🔴 LIVE REPORT PREVIEW • {rtuCount} RTU{rtuCount > 1 ? "s" : ""}{" "}
-          Captured
+          🔴 LIVE REPORT PREVIEW •{" "}
+          {equipmentType === "electrical"
+            ? `${panelCount} Panel${panelCount > 1 ? "s" : ""}, ${transformerCount} Transformer${transformerCount > 1 ? "s" : ""} Captured`
+            : `${rtuCount} RTU${rtuCount > 1 ? "s" : ""} Captured`}
         </div>
       )}
 
@@ -808,6 +1213,480 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
         </table>
       </div>
 
+      {/* Electrical Systems Section - Only show if there are panels */}
+      {panels.length > 0 && (
+        <div style={{ marginBottom: "30px", marginTop: "40px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+            <h3
+              style={{
+                fontSize: "16px",
+                fontWeight: "bold",
+                margin: 0,
+                textDecoration: "underline",
+              }}
+            >
+              Electrical Systems:
+            </h3>
+            {isLivePreview && (
+              <button
+                onClick={() => {
+                  if (isEditingElectrical) {
+                    setIsEditingElectrical(false);
+                  } else {
+                    setIsEditingElectrical(true);
+                  }
+                }}
+                className="btn"
+                style={{
+                  padding: "5px 15px",
+                  fontSize: "12px",
+                  backgroundColor: isEditingElectrical ? "#28a745" : "#007bff",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer"
+                }}
+              >
+                {isEditingElectrical ? "✓ Save" : "✏️ Edit"}
+              </button>
+            )}
+          </div>
+          {isEditingElectrical ? (
+            <textarea
+              value={editedElectricalReport}
+              onChange={(e) => setEditedElectricalReport(e.target.value)}
+              style={{
+                width: "100%",
+                minHeight: "150px",
+                padding: "10px",
+                fontSize: "14px",
+                lineHeight: "1.6",
+                border: "2px solid #28a745",
+                borderRadius: "4px",
+                fontFamily: "inherit",
+                resize: "vertical",
+                whiteSpace: "pre-wrap"
+              }}
+            />
+          ) : (
+            <p
+              style={{
+                textAlign: "justify",
+                lineHeight: "1.6",
+                fontSize: "14px",
+                whiteSpace: "pre-wrap"
+              }}
+            >
+              {editedElectricalReport}
+            </p>
+          )}
+
+          {/* Transformer Summary Table - BEFORE Panel Table */}
+          {transformers.length > 0 && (
+            <div style={{ marginTop: "30px" }}>
+              <h4 style={{ marginBottom: "15px" }}>Transformer Summary:</h4>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontSize: "13px",
+                }}
+              >
+                <thead>
+                  <tr style={{ backgroundColor: "#f0f0f0" }}>
+                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                      Transformer
+                    </th>
+                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                      Manufacturer
+                    </th>
+                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                      kVA
+                    </th>
+                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                      Primary
+                    </th>
+                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                      Secondary
+                    </th>
+                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                      Location
+                    </th>
+                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                      Condition
+                    </th>
+                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                      Recommendation
+                    </th>
+                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transformers.map((transformer) => {
+                    const transformerData = extractTransformerData(transformer);
+                    const isEditingThisTransformer = editingTransformers[transformer.id];
+                    const isTempTransformer = transformer.id.startsWith('temp-');
+                    const displayData = (isTempTransformer && editedTransformerData[transformer.id]) || (isEditingThisTransformer && editedTransformerData[transformer.id])
+                      ? editedTransformerData[transformer.id]
+                      : transformerData;
+
+                    return (
+                      <tr key={transformer.id}>
+                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                          {isEditingThisTransformer ? (
+                            <input
+                              type="text"
+                              value={displayData.transformerDesignation}
+                              onChange={(e) => updateTransformerField(transformer.id, 'transformerDesignation', e.target.value)}
+                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                            />
+                          ) : (
+                            transformerData.transformerDesignation
+                          )}
+                        </td>
+                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                          {isEditingThisTransformer ? (
+                            <input
+                              type="text"
+                              value={displayData.manufacturer}
+                              onChange={(e) => updateTransformerField(transformer.id, 'manufacturer', e.target.value)}
+                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                            />
+                          ) : (
+                            transformerData.manufacturer
+                          )}
+                        </td>
+                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                          {isEditingThisTransformer ? (
+                            <input
+                              type="text"
+                              value={displayData.powerRating}
+                              onChange={(e) => updateTransformerField(transformer.id, 'powerRating', e.target.value)}
+                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                            />
+                          ) : (
+                            transformerData.powerRating
+                          )}
+                        </td>
+                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                          {isEditingThisTransformer ? (
+                            <input
+                              type="text"
+                              value={displayData.primaryVoltage}
+                              onChange={(e) => updateTransformerField(transformer.id, 'primaryVoltage', e.target.value)}
+                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                            />
+                          ) : (
+                            transformerData.primaryVoltage
+                          )}
+                        </td>
+                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                          {isEditingThisTransformer ? (
+                            <input
+                              type="text"
+                              value={displayData.secondaryVoltage}
+                              onChange={(e) => updateTransformerField(transformer.id, 'secondaryVoltage', e.target.value)}
+                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                            />
+                          ) : (
+                            transformerData.secondaryVoltage
+                          )}
+                        </td>
+                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                          {isEditingThisTransformer ? (
+                            <input
+                              type="text"
+                              value={displayData.transformerLocation}
+                              onChange={(e) => updateTransformerField(transformer.id, 'transformerLocation', e.target.value)}
+                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                            />
+                          ) : (
+                            transformerData.transformerLocation
+                          )}
+                        </td>
+                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                          {isEditingThisTransformer ? (
+                            <select
+                              value={displayData.condition}
+                              onChange={(e) => updateTransformerField(transformer.id, 'condition', e.target.value)}
+                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                            >
+                              <option value="Good">Good</option>
+                              <option value="Fair">Fair</option>
+                              <option value="Poor">Poor</option>
+                            </select>
+                          ) : (
+                            transformerData.condition
+                          )}
+                        </td>
+                        <td
+                          style={{
+                            border: "1px solid #ddd",
+                            padding: "10px",
+                            color: transformerData.condition === "Poor" ? "#d32f2f" : "#388e3c",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {transformerData.condition === "Poor" ? "Monitor" : "Reuse"}
+                        </td>
+                        <td style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
+                          {isEditingThisTransformer ? (
+                            <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
+                              <button
+                                onClick={() => saveTransformerEdit(transformer.id)}
+                                style={{
+                                  padding: "4px 8px",
+                                  fontSize: "12px",
+                                  backgroundColor: "#28a745",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                ✓ Save
+                              </button>
+                              <button
+                                onClick={() => cancelTransformerEdit(transformer.id)}
+                                style={{
+                                  padding: "4px 8px",
+                                  fontSize: "12px",
+                                  backgroundColor: "#6c757d",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => startEditingTransformer(transformer.id)}
+                              style={{
+                                padding: "4px 8px",
+                                fontSize: "12px",
+                                backgroundColor: "#007bff",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                              }}
+                              title="Edit Transformer"
+                            >
+                              ✏️ Edit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Panel Summary Table */}
+          {panels.length > 0 && (
+            <div style={{ marginTop: "30px" }}>
+              <h4 style={{ marginBottom: "15px" }}>Panel Summary:</h4>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "13px",
+              }}
+            >
+              <thead>
+                <tr style={{ backgroundColor: "#f0f0f0" }}>
+                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    Panel
+                  </th>
+                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    Manufacturer
+                  </th>
+                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    Bus Rating
+                  </th>
+                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    Voltage
+                  </th>
+                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    Main Breaker
+                  </th>
+                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    Condition
+                  </th>
+                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    Recommendation
+                  </th>
+                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {panels.map((panel, index) => {
+                  const panelData = extractPanelData(panel);
+                  const isEditingThisPanel = editingPanels[panel.id];
+                  const isTempPanel = panel.id.startsWith('temp-');
+                  const displayData = (isTempPanel && editedPanelData[panel.id]) || (isEditingThisPanel && editedPanelData[panel.id])
+                    ? editedPanelData[panel.id]
+                    : panelData;
+
+                  const needsReplacement = panelData.isFPE || panelData.isZinsco || panelData.isChallenger || panelData.condition === "Hazardous";
+
+                  return (
+                    <tr key={panel.id} style={{ backgroundColor: needsReplacement ? "#ffebee" : "transparent" }}>
+                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        {isEditingThisPanel ? (
+                          <input
+                            type="text"
+                            value={displayData.panelDesignation}
+                            onChange={(e) => updatePanelField(panel.id, 'panelDesignation', e.target.value)}
+                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                          />
+                        ) : (
+                          panelData.panelDesignation
+                        )}
+                      </td>
+                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        {isEditingThisPanel ? (
+                          <input
+                            type="text"
+                            value={displayData.manufacturer}
+                            onChange={(e) => updatePanelField(panel.id, 'manufacturer', e.target.value)}
+                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                          />
+                        ) : (
+                          panelData.manufacturer
+                        )}
+                      </td>
+                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        {isEditingThisPanel ? (
+                          <input
+                            type="text"
+                            value={displayData.busRating}
+                            onChange={(e) => updatePanelField(panel.id, 'busRating', e.target.value)}
+                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                          />
+                        ) : (
+                          panelData.busRating
+                        )}
+                      </td>
+                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        {isEditingThisPanel ? (
+                          <input
+                            type="text"
+                            value={displayData.voltage}
+                            onChange={(e) => updatePanelField(panel.id, 'voltage', e.target.value)}
+                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                          />
+                        ) : (
+                          panelData.voltage
+                        )}
+                      </td>
+                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        {isEditingThisPanel ? (
+                          <input
+                            type="text"
+                            value={displayData.mainBreakerSize}
+                            onChange={(e) => updatePanelField(panel.id, 'mainBreakerSize', e.target.value)}
+                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                          />
+                        ) : (
+                          panelData.mainBreakerSize
+                        )}
+                      </td>
+                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        {isEditingThisPanel ? (
+                          <select
+                            value={displayData.condition}
+                            onChange={(e) => updatePanelField(panel.id, 'condition', e.target.value)}
+                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                          >
+                            <option value="Good">Good</option>
+                            <option value="Fair">Fair</option>
+                            <option value="Poor">Poor</option>
+                            <option value="Hazardous">Hazardous</option>
+                          </select>
+                        ) : (
+                          panelData.condition
+                        )}
+                      </td>
+                      <td
+                        style={{
+                          border: "1px solid #ddd",
+                          padding: "10px",
+                          color: needsReplacement ? "#d32f2f" : "#388e3c",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {needsReplacement ? "REPLACE" : "Reuse"}
+                      </td>
+                      <td style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
+                        {isEditingThisPanel ? (
+                          <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
+                            <button
+                              onClick={() => savePanelEdit(panel.id)}
+                              style={{
+                                padding: "4px 8px",
+                                fontSize: "12px",
+                                backgroundColor: "#28a745",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                              }}
+                            >
+                              ✓ Save
+                            </button>
+                            <button
+                              onClick={() => cancelPanelEdit(panel.id)}
+                              style={{
+                                padding: "4px 8px",
+                                fontSize: "12px",
+                                backgroundColor: "#6c757d",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                              }}
+                            >
+                              ✕ Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => startEditingPanel(panel.id)}
+                            style={{
+                              padding: "4px 8px",
+                              fontSize: "12px",
+                              backgroundColor: "#007bff",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                            }}
+                            title="Edit Panel"
+                          >
+                            ✏️ Edit
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          )}
+        </div>
+      )}
+
       {/* Export Buttons - Only show when not in live preview */}
       {!isLivePreview && (
         <div
@@ -895,6 +1774,10 @@ export default React.memo(ReportGenerator, (prevProps, nextProps) => {
     prevProps.isLivePreview === nextProps.isLivePreview &&
     prevProps.currentExtractedData === nextProps.currentExtractedData &&
     prevProps.currentRTUNumber === nextProps.currentRTUNumber &&
+    prevProps.currentPanelNumber === nextProps.currentPanelNumber &&
+    prevProps.currentTransformerNumber === nextProps.currentTransformerNumber &&
+    prevProps.equipmentType === nextProps.equipmentType &&
+    prevProps.currentEquipmentSubtype === nextProps.currentEquipmentSubtype &&
     JSON.stringify(prevProps.currentUserInputs) === JSON.stringify(nextProps.currentUserInputs)
   );
 });

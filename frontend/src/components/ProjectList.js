@@ -57,6 +57,7 @@ const ProjectList = () => {
       id: `project-${Date.now()}`,
       ...newProject,
       rtus: [],
+      electricalPanels: [],
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
     };
@@ -108,7 +109,7 @@ const ProjectList = () => {
   if (showReportFor) {
     return (
       <div className="container">
-        <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", gap: "15px", marginBottom: "20px", flexWrap: "wrap" }}>
           <button
             onClick={() => setShowReportFor(null)}
             className="btn"
@@ -123,7 +124,17 @@ const ProjectList = () => {
             onClick={() => continueProject(showReportFor.id)}
             className="btn btn-primary"
           >
-            ➕ Add More RTUs
+            📸 Add More RTUs
+          </button>
+          <button
+            onClick={() => navigate(`/electrical/${showReportFor.id}`)}
+            className="btn"
+            style={{
+              backgroundColor: "#28a745",
+              color: "white",
+            }}
+          >
+            ⚡ Add Electrical Panels
           </button>
         </div>
         <ReportGenerator
@@ -149,8 +160,9 @@ const ProjectList = () => {
             <h1 style={{ margin: "0 0 5px 0" }}>MEP Survey Projects</h1>
             <p style={{ margin: 0, color: "#666" }}>
               {projects.length} project{projects.length !== 1 ? "s" : ""} •{" "}
-              {projects.reduce((sum, p) => sum + (p.rtus?.length || 0), 0)} RTUs
-              captured
+              {projects.reduce((sum, p) => sum + (p.rtus?.length || 0), 0)} RTUs •{" "}
+              {projects.reduce((sum, p) => sum + (p.electricalPanels?.length || 0), 0)} Panels
+              {" "}captured
             </p>
           </div>
           <button
@@ -497,18 +509,33 @@ const ProjectList = () => {
                   Project #{project.projectNumber}
                 </p>
               </div>
-              <div
-                style={{
-                  backgroundColor:
-                    project.rtus?.length > 0 ? "#28a745" : "#ffc107",
-                  color: "white",
-                  padding: "8px 12px",
-                  borderRadius: "20px",
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                }}
-              >
-                {project.rtus?.length || 0} RTUs
+              <div style={{ display: "flex", gap: "8px" }}>
+                <div
+                  style={{
+                    backgroundColor:
+                      project.rtus?.length > 0 ? "#007bff" : "#6c757d",
+                    color: "white",
+                    padding: "8px 12px",
+                    borderRadius: "20px",
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {project.rtus?.length || 0} RTUs
+                </div>
+                <div
+                  style={{
+                    backgroundColor:
+                      project.electricalPanels?.length > 0 ? "#28a745" : "#6c757d",
+                    color: "white",
+                    padding: "8px 12px",
+                    borderRadius: "20px",
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {project.electricalPanels?.length || 0} Panels
+                </div>
               </div>
             </div>
 
@@ -533,41 +560,58 @@ const ProjectList = () => {
 
             <div
               style={{
-                display: "flex",
-                gap: "10px",
                 marginTop: "15px",
                 paddingTop: "15px",
                 borderTop: "1px solid #eee",
               }}
             >
-              <button
-                onClick={() => continueProject(project.id)}
-                className="btn btn-primary"
-                style={{ flex: 1, padding: "10px" }}
-              >
-                📸{" "}
-                {project.rtus?.length > 0 ? "Continue Survey" : "Start Survey"}
-              </button>
-              {project.rtus?.length > 0 && (
+              {/* First row - HVAC and Electrical survey buttons */}
+              <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
                 <button
-                  onClick={() => viewReport(project)}
-                  className="btn btn-success"
-                  style={{ flex: 1, padding: "10px" }}
+                  onClick={() => continueProject(project.id)}
+                  className="btn btn-primary"
+                  style={{ flex: 1, padding: "10px", fontSize: "14px" }}
                 >
-                  📄 View Report
+                  📸 HVAC Survey
                 </button>
-              )}
-              <button
-                onClick={() => deleteProject(project.id)}
-                className="btn"
-                style={{
-                  backgroundColor: "#dc3545",
-                  color: "white",
-                  padding: "10px 15px",
-                }}
-              >
-                🗑️
-              </button>
+                <button
+                  onClick={() => navigate(`/electrical/${project.id}`)}
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    padding: "10px",
+                    fontSize: "14px",
+                    backgroundColor: "#28a745",
+                    color: "white"
+                  }}
+                >
+                  ⚡ Electrical Survey
+                </button>
+              </div>
+
+              {/* Second row - View Report and Delete buttons */}
+              <div style={{ display: "flex", gap: "10px" }}>
+                {(project.rtus?.length > 0 || project.electricalPanels?.length > 0) && (
+                  <button
+                    onClick={() => viewReport(project)}
+                    className="btn btn-success"
+                    style={{ flex: 1, padding: "10px" }}
+                  >
+                    📄 View Report
+                  </button>
+                )}
+                <button
+                  onClick={() => deleteProject(project.id)}
+                  className="btn"
+                  style={{
+                    backgroundColor: "#dc3545",
+                    color: "white",
+                    padding: "10px 15px",
+                  }}
+                >
+                  🗑️ Delete
+                </button>
+              </div>
             </div>
           </div>
         ))}

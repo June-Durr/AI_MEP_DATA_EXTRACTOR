@@ -8,6 +8,7 @@ import {
   useLocation,
 } from "react-router-dom";
 import Camera from "./components/Camera";
+import ElectricalSurvey from "./components/ElectricalSurvey";
 import ProjectList from "./components/ProjectList";
 import "./App.css";
 
@@ -90,6 +91,7 @@ function AppContent() {
         <Route path="/" element={<ProjectList />} />
         <Route path="/camera" element={<Camera />} />
         <Route path="/camera/:projectId" element={<Camera />} />
+        <Route path="/electrical/:projectId" element={<ElectricalSurvey />} />
       </Routes>
 
       {/* Footer */}
