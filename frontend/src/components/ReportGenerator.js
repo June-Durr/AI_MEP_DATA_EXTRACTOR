@@ -61,10 +61,6 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
             panelDesignation: currentUserInputs?.panelDesignation || "",
             panelLocation: currentUserInputs?.panelLocation || "",
             condition: currentUserInputs?.condition || "Good",
-            // Include hierarchy fields
-            isServiceEntrance: currentUserInputs?.isServiceEntrance || false,
-            feedsFromPanel: currentUserInputs?.feedsFromPanel || "",
-            subfeedBreakerSize: currentUserInputs?.subfeedBreakerSize || "",
           }
         }
       ];
@@ -149,10 +145,6 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       isFPE: data.safetyWarnings?.isFPE || false,
       isZinsco: data.safetyWarnings?.isZinsco || false,
       isChallenger: data.safetyWarnings?.isChallenger || false,
-      // Hierarchy fields
-      isServiceEntrance: data.isServiceEntrance || false,
-      feedsFromPanel: data.feedsFromPanel || "",
-      subfeedBreakerSize: data.subfeedBreakerSize || "",
     };
   };
 
@@ -335,80 +327,109 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       : ""
   } The majority of ductwork in the space is interior insulated rectangular sheet metal ductwork with insulated flexible diffuser connections.`;
 
-  // Sort electrical equipment by hierarchy
+  // Sort electrical equipment by hierarchy using AI-powered detection
   const sortElectricalHierarchy = (panels, transformers) => {
     const sorted = [];
 
-    // 1. TRANSFORMERS FIRST (if any exist)
-    transformers.forEach(t => {
+    // Helper: Parse voltage to numeric for comparison
+    const parseVoltage = (voltageStr) => {
+      if (!voltageStr || voltageStr === "Unknown" || voltageStr === "Not Available") return 0;
+      // Extract highest number: "480V" → 480, "208Y/120V" → 208, "120/240V" → 240
+      const matches = voltageStr.match(/\d+/g);
+      if (!matches) return 0;
+      return Math.max(...matches.map(n => parseInt(n)));
+    };
+
+    // Helper: Parse amp rating
+    const parseAmps = (ampStr) => {
+      if (!ampStr || ampStr === "Unknown" || ampStr === "Not Available") return 0;
+      const match = ampStr.match(/(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    };
+
+    // Helper: Detect if panel has main breaker (vs MLO)
+    const hasMainBreaker = (panel) => {
+      const mainBreaker = panel.data?.incomingTermination?.mainBreakerSize;
+      return mainBreaker && mainBreaker !== "MLO" && mainBreaker !== "Unknown";
+    };
+
+    // STEP 1: Add all transformers first (highest voltage primary)
+    const sortedTransformers = [...transformers].sort((a, b) => {
+      const voltA = parseVoltage(a.data?.electrical?.primaryVoltage);
+      const voltB = parseVoltage(b.data?.electrical?.primaryVoltage);
+      return voltB - voltA;
+    });
+
+    sortedTransformers.forEach(t => {
       sorted.push({
         type: 'transformer',
         level: 0,
+        voltage: parseVoltage(t.data?.electrical?.primaryVoltage),
+        amps: parseAmps(t.data?.electrical?.powerRating),
         data: t
       });
     });
 
-    // 2. FIND MAIN PANEL (service entrance)
-    const mainPanel = panels.find(p =>
-      p.data.isServiceEntrance === true
-    );
+    // STEP 2: Group panels by voltage level
+    const panelsByVoltage = {};
+    panels.forEach(p => {
+      const voltage = parseVoltage(p.data?.electrical?.voltage);
+      if (!panelsByVoltage[voltage]) {
+        panelsByVoltage[voltage] = [];
+      }
+      panelsByVoltage[voltage].push(p);
+    });
 
-    // FALLBACK: If no panel marked as service entrance, use highest amp rating
-    const fallbackMain = panels.reduce((max, p) => {
-      const amps = parseInt(p.data.electrical?.busRating) || 0;
-      const maxAmps = parseInt(max?.data?.electrical?.busRating) || 0;
-      return amps > maxAmps ? p : max;
-    }, null);
+    // STEP 3: Sort voltage groups (highest to lowest)
+    const voltageKeys = Object.keys(panelsByVoltage)
+      .map(v => parseInt(v))
+      .sort((a, b) => b - a);
 
-    const primaryMain = mainPanel || fallbackMain;
+    // STEP 4: Process each voltage level
+    let currentLevel = transformers.length > 0 ? 1 : 0;
 
-    if (primaryMain) {
-      sorted.push({
-        type: 'main',
-        level: 1,
-        data: primaryMain
+    voltageKeys.forEach((voltage, voltageIndex) => {
+      const panelsAtVoltage = panelsByVoltage[voltage];
+
+      // Sort panels within this voltage level by amp rating (highest first)
+      panelsAtVoltage.sort((a, b) => {
+        const ampsA = parseAmps(a.data?.electrical?.busRating);
+        const ampsB = parseAmps(b.data?.electrical?.busRating);
+
+        // If amps equal, prioritize panel with main breaker
+        if (ampsA === ampsB) {
+          return hasMainBreaker(b) ? 1 : -1;
+        }
+
+        return ampsB - ampsA;
       });
-    }
 
-    // 3. BUILD HIERARCHY TREE (recursive function)
-    const addChildPanels = (parentDesignation, currentLevel) => {
-      const children = panels
-        .filter(p =>
-          p.data.feedsFromPanel === parentDesignation &&
-          p.id !== primaryMain?.id  // Don't include main panel again
-        )
-        .sort((a, b) => {
-          // Sort by amp rating descending
-          const ampsA = parseInt(a.data.electrical?.busRating) || 0;
-          const ampsB = parseInt(b.data.electrical?.busRating) || 0;
-          return ampsB - ampsA;
-        });
+      // Assign type based on characteristics
+      panelsAtVoltage.forEach((panel, panelIndex) => {
+        const amps = parseAmps(panel.data?.electrical?.busRating);
+        const isFirstAtVoltage = panelIndex === 0;
+        const isHighestVoltage = voltageIndex === 0;
+        const hasMain = hasMainBreaker(panel);
 
-      children.forEach(child => {
+        let type;
+        if (isHighestVoltage && isFirstAtVoltage && hasMain) {
+          type = 'main';  // Main service panel
+        } else if (amps >= 200 && hasMain) {
+          type = 'distribution';  // Distribution panel
+        } else {
+          type = 'branch';  // Branch panel
+        }
+
         sorted.push({
-          type: currentLevel === 1 ? 'distribution' : 'branch',
-          level: currentLevel + 1,
-          data: child
+          type: type,
+          level: currentLevel,
+          voltage: voltage,
+          amps: amps,
+          data: panel
         });
-
-        // Recursive: check if this panel feeds others
-        addChildPanels(child.data.panelDesignation, currentLevel + 1);
       });
-    };
 
-    if (primaryMain) {
-      addChildPanels(primaryMain.data.panelDesignation, 1);
-    }
-
-    // 4. Add orphan panels (not connected to hierarchy) at the end
-    const sortedIds = sorted.map(s => s.data.id);
-    const orphans = panels.filter(p => !sortedIds.includes(p.id));
-    orphans.forEach(orphan => {
-      sorted.push({
-        type: 'orphan',
-        level: 99,
-        data: orphan
-      });
+      currentLevel++;
     });
 
     return sorted;
@@ -417,38 +438,43 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
   // Generate electrical systems report with hierarchy sorting
   const generateElectricalReport = () => {
     if (panels.length === 0 && transformers.length === 0) {
-      return "No electrical equipment has been surveyed. Please add electrical panel or transformer information to complete this section.";
+      return "No electrical equipment has been surveyed.";
     }
 
     const sortedEquipment = sortElectricalHierarchy(panels, transformers);
 
     let narrative = "Electrical Systems:\n\n";
 
-    // Service entrance paragraph (user must edit)
-    narrative += "[USER MUST EDIT: The proposed space is served by a separately metered [SIZE]-amp, [VOLTAGE], [PHASE], [WIRE_CONFIG] [SOURCE_TYPE] located in [LOCATION]. The service runs [ROUTING_DESCRIPTION] to ";
+    // Find the main panel (first panel in hierarchy)
+    const mainEquipment = sortedEquipment.find(e => e.type === 'main');
 
-    // Find first panel in hierarchy
-    const firstPanel = sortedEquipment.find(e => e.type === 'main' || e.type === 'distribution');
-    if (firstPanel) {
-      const panelData = extractPanelData(firstPanel.data);
-      narrative += `Panelboard "${panelData.panelDesignation}".]\n\n`;
-    } else {
-      narrative += `the electrical panel.]\n\n`;
+    if (mainEquipment) {
+      const mainData = extractPanelData(mainEquipment.data);
+      narrative += `[USER MUST EDIT: The proposed space is served by a separately metered ${mainData.busRating}, ${mainData.voltage}, ${mainData.phase}, ${mainData.wireConfig || '4-wire'} [fused switch/breaker/disconnect] located in [LOCATION]. The service runs [overhead/underground] in a [SIZE]" conduit to Panelboard "${mainData.panelDesignation}".]\n\n`;
     }
 
-    // Generate panel descriptions in hierarchy order
+    // Generate descriptions for all equipment in hierarchy order
     sortedEquipment.forEach((equipment, index) => {
       const data = equipment.data;
 
       if (equipment.type === 'transformer') {
         const transformerData = extractTransformerData(data);
-        narrative += `Power is supplied by a ${transformerData.powerRating !== "Unknown" ? transformerData.powerRating : "[kVA]"} ${transformerData.primaryVoltage !== "Unknown" ? transformerData.primaryVoltage : "[PRIMARY]"}/${transformerData.secondaryVoltage !== "Unknown" ? transformerData.secondaryVoltage : "[SECONDARY]"} transformer (${transformerData.transformerDesignation}) manufactured by ${transformerData.manufacturer} located in ${transformerData.transformerLocation}. The transformer is in ${transformerData.condition.toLowerCase()} condition.\n\n`;
+        narrative += `Power is supplied by a ${transformerData.powerRating} ${transformerData.primaryVoltage}/${transformerData.secondaryVoltage} transformer (${transformerData.transformerDesignation}) manufactured by ${transformerData.manufacturer} located in ${transformerData.transformerLocation}. The transformer is in ${transformerData.condition.toLowerCase()} condition.`;
+
+        // Check if next item is a panel - add connection
+        const nextItem = sortedEquipment[index + 1];
+        if (nextItem && nextItem.type !== 'transformer') {
+          const nextPanel = extractPanelData(nextItem.data);
+          narrative += ` The secondary feeds Panelboard "${nextPanel.panelDesignation}".`;
+        }
+
+        narrative += `\n\n`;
       }
 
       if (equipment.type === 'main' || equipment.type === 'distribution' || equipment.type === 'branch') {
         const panelData = extractPanelData(data);
 
-        narrative += `Panelboard "${panelData.panelDesignation}" is a ${panelData.busRating !== "Unknown" ? panelData.busRating : "[BUS_RATING]"} ${panelData.voltage !== "Unknown" ? panelData.voltage : "[VOLTAGE]"} ${panelData.phase !== "Unknown" ? panelData.phase : "[PHASE]"} ${panelData.wireConfig || ''} panel`;
+        narrative += `Panelboard "${panelData.panelDesignation}" is a ${panelData.busRating} ${panelData.voltage} ${panelData.phase} ${panelData.wireConfig || ''} panel`;
 
         if (panelData.mainBreakerSize !== "MLO" && panelData.mainBreakerSize !== "Unknown") {
           narrative += ` with a ${panelData.mainBreakerSize} main breaker`;
@@ -456,19 +482,16 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
           narrative += ` with main lug only (MLO)`;
         }
 
-        // Check if this panel feeds others (has subfeed)
-        const childPanels = sortedEquipment.filter(e =>
-          e.data.data?.feedsFromPanel === panelData.panelDesignation
-        );
-
-        if (childPanels.length > 0 && data.data?.subfeedBreakerSize) {
-          const childPanelData = extractPanelData(childPanels[0].data);
-          narrative += ` and a ${data.data.subfeedBreakerSize} subfeed breaker which serves Panelboard "${childPanelData.panelDesignation}"`;
+        // Look ahead to see if this panel feeds the next one
+        const nextItem = sortedEquipment[index + 1];
+        if (nextItem && (nextItem.voltage < equipment.voltage ||
+            (nextItem.voltage === equipment.voltage && nextItem.amps < equipment.amps))) {
+          const nextPanel = extractPanelData(nextItem.data);
+          narrative += ` and has a subfeed breaker serving Panelboard "${nextPanel.panelDesignation}"`;
         }
 
         narrative += `.`;
 
-        // Add location context
         if (panelData.panelLocation && panelData.panelLocation !== "Unknown Location") {
           narrative += ` Located in ${panelData.panelLocation}.`;
         }
@@ -481,9 +504,6 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
     const allGood = panels.every(p => {
       const pd = extractPanelData(p);
       return pd.condition === "Good" && !pd.isFPE && !pd.isZinsco && !pd.isChallenger;
-    }) && transformers.every(t => {
-      const td = extractTransformerData(t);
-      return td.condition === "Good";
     });
 
     const hasHazardous = panels.some(p => {
@@ -1594,7 +1614,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                     Panel
                   </th>
                   <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
-                    Hierarchy
+                    Auto-Detected Hierarchy
                   </th>
                   <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
                     Manufacturer
@@ -1648,10 +1668,21 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                         )}
                       </td>
                       <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                        {equipment.type === 'main' && '🔴 Main'}
-                        {equipment.type === 'distribution' && '🟡 Distribution'}
-                        {equipment.type === 'branch' && '🟢 Branch'}
-                        {equipment.type === 'orphan' && '⚪ Unlinked'}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                            {equipment.type === 'main' && <span title="Main Service Panel">🔴</span>}
+                            {equipment.type === 'distribution' && <span title="Distribution Panel">🟡</span>}
+                            {equipment.type === 'branch' && <span title="Branch Panel">🟢</span>}
+                            <strong>
+                              {equipment.type === 'main' && 'Main'}
+                              {equipment.type === 'distribution' && 'Distribution'}
+                              {equipment.type === 'branch' && 'Branch'}
+                            </strong>
+                          </div>
+                          <span style={{ fontSize: "11px", color: "#666" }}>
+                            L{equipment.level} • {equipment.voltage}V • {equipment.amps}A
+                          </span>
+                        </div>
                       </td>
                       <td style={{ border: "1px solid #ddd", padding: "10px" }}>
                         {isEditingThisPanel ? (
