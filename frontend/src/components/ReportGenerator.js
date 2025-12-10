@@ -1,7 +1,18 @@
 // frontend/src/components/ReportGenerator.js - Enhanced for Live Preview with Editing
 import React, { useState, useEffect } from "react";
 
-const ReportGenerator = ({ project, squareFootage, isLivePreview = false, currentExtractedData = null, currentRTUNumber = null, currentPanelNumber = null, currentTransformerNumber = null, currentUserInputs = null, equipmentType = "hvac", currentEquipmentSubtype = null }) => {
+const ReportGenerator = ({
+  project,
+  squareFootage,
+  isLivePreview = false,
+  currentExtractedData = null,
+  currentRTUNumber = null,
+  currentPanelNumber = null,
+  currentTransformerNumber = null,
+  currentUserInputs = null,
+  equipmentType = "hvac",
+  currentEquipmentSubtype = null,
+}) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedReport, setEditedReport] = useState("");
   const [editingRTUs, setEditingRTUs] = useState({}); // Track which RTUs are being edited
@@ -25,8 +36,14 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
   // Early return must come after all hooks to comply with Rules of Hooks
   // Memoize saved data to prevent unnecessary re-renders
   const savedRTUs = React.useMemo(() => project?.rtus || [], [project?.rtus]);
-  const savedPanels = React.useMemo(() => project?.electricalPanels || [], [project?.electricalPanels]);
-  const savedTransformers = React.useMemo(() => project?.transformers || [], [project?.transformers]);
+  const savedPanels = React.useMemo(
+    () => project?.electricalPanels || [],
+    [project?.electricalPanels]
+  );
+  const savedTransformers = React.useMemo(
+    () => project?.transformers || [],
+    [project?.transformers]
+  );
 
   // If we have current extracted data, create a temporary RTU/Panel object and add it to the list
   // Use useMemo to prevent creating new objects on every render
@@ -41,16 +58,29 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
             ...currentExtractedData,
             condition: currentUserInputs?.condition || "Good",
             heatType: currentUserInputs?.heatType || "Electric",
-            gasPipeSize: currentUserInputs?.heatType === "Gas" ? currentUserInputs?.gasPipeSize : null,
-          }
-        }
+            gasPipeSize:
+              currentUserInputs?.heatType === "Gas"
+                ? currentUserInputs?.gasPipeSize
+                : null,
+          },
+        },
       ];
     }
     return savedRTUs;
-  }, [savedRTUs, currentExtractedData, currentRTUNumber, currentUserInputs, equipmentType]);
+  }, [
+    savedRTUs,
+    currentExtractedData,
+    currentRTUNumber,
+    currentUserInputs,
+    equipmentType,
+  ]);
 
   const panels = React.useMemo(() => {
-    if (equipmentType === "electrical" && currentEquipmentSubtype === "panel" && currentExtractedData) {
+    if (
+      equipmentType === "electrical" &&
+      currentEquipmentSubtype === "panel" &&
+      currentExtractedData
+    ) {
       return [
         ...savedPanels,
         {
@@ -61,15 +91,26 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
             panelDesignation: currentUserInputs?.panelDesignation || "",
             panelLocation: currentUserInputs?.panelLocation || "",
             condition: currentUserInputs?.condition || "Good",
-          }
-        }
+          },
+        },
       ];
     }
     return savedPanels;
-  }, [savedPanels, currentExtractedData, currentPanelNumber, currentUserInputs, equipmentType, currentEquipmentSubtype]);
+  }, [
+    savedPanels,
+    currentExtractedData,
+    currentPanelNumber,
+    currentUserInputs,
+    equipmentType,
+    currentEquipmentSubtype,
+  ]);
 
   const transformers = React.useMemo(() => {
-    if (equipmentType === "electrical" && currentEquipmentSubtype === "transformer" && currentExtractedData) {
+    if (
+      equipmentType === "electrical" &&
+      currentEquipmentSubtype === "transformer" &&
+      currentExtractedData
+    ) {
       return [
         ...savedTransformers,
         {
@@ -80,12 +121,19 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
             transformerDesignation: currentUserInputs?.panelDesignation || "", // Using panelDesignation field
             transformerLocation: currentUserInputs?.panelLocation || "", // Using panelLocation field
             condition: currentUserInputs?.condition || "Good",
-          }
-        }
+          },
+        },
       ];
     }
     return savedTransformers;
-  }, [savedTransformers, currentExtractedData, currentTransformerNumber, currentUserInputs, equipmentType, currentEquipmentSubtype]);
+  }, [
+    savedTransformers,
+    currentExtractedData,
+    currentTransformerNumber,
+    currentUserInputs,
+    equipmentType,
+    currentEquipmentSubtype,
+  ]);
 
   const rtuCount = rtus.length;
   const panelCount = panels.length;
@@ -248,10 +296,17 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
         // Build description with proper formatting for illegible data
         let description = `The ${ordinal} unit is ${
           tonnage.match(/\d/) ? "an" : "a"
-        } ${tonnage} ${heatType === "Electric" ? "electric" : "gas-fired"} model manufactured by ${manufacturer}`;
+        } ${tonnage} ${
+          heatType === "Electric" ? "electric" : "gas-fired"
+        } model manufactured by ${manufacturer}`;
 
         // Only add year if it's legible and not "Unknown" or "Not Available"
-        if (year && year !== "Unknown" && year !== "Not legible" && year !== "Not Available") {
+        if (
+          year &&
+          year !== "Unknown" &&
+          year !== "Not legible" &&
+          year !== "Not Available"
+        ) {
           description += ` in ${year}`;
         } else if (year === "Not legible") {
           description += ` (manufacturing year not legible on nameplate)`;
@@ -292,12 +347,12 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
   };
 
   // Count gas units and electric units separately
-  const gasUnitsCount = rtus.filter(rtu => {
+  const gasUnitsCount = rtus.filter((rtu) => {
     const rtuData = extractRTUData(rtu);
     return rtuData.heatType === "Gas";
   }).length;
 
-  const electricUnitsCount = rtus.filter(rtu => {
+  const electricUnitsCount = rtus.filter((rtu) => {
     const rtuData = extractRTUData(rtu);
     return rtuData.heatType === "Electric";
   }).length;
@@ -306,16 +361,32 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
   const generateOpeningSentence = () => {
     if (gasUnitsCount > 0 && electricUnitsCount > 0) {
       // Mixed units
-      return `The proposed space is served by ${numberToWord(gasUnitsCount)} single packaged gas-fired roof top unit${gasUnitsCount > 1 ? "s" : ""} and ${numberToWord(electricUnitsCount)} electric roof top unit${electricUnitsCount > 1 ? "s" : ""}.`;
+      return `The proposed space is served by ${numberToWord(
+        gasUnitsCount
+      )} single packaged gas-fired roof top unit${
+        gasUnitsCount > 1 ? "s" : ""
+      } and ${numberToWord(electricUnitsCount)} electric roof top unit${
+        electricUnitsCount > 1 ? "s" : ""
+      }.`;
     } else if (gasUnitsCount > 0) {
       // All gas units
-      return `The proposed space is served by ${numberToWord(gasUnitsCount)} single packaged gas-fired roof top unit${gasUnitsCount > 1 ? "s" : ""}.`;
+      return `The proposed space is served by ${numberToWord(
+        gasUnitsCount
+      )} single packaged gas-fired roof top unit${
+        gasUnitsCount > 1 ? "s" : ""
+      }.`;
     } else if (electricUnitsCount > 0) {
       // All electric units
-      return `The proposed space is served by ${numberToWord(electricUnitsCount)} single packaged electric roof top unit${electricUnitsCount > 1 ? "s" : ""}.`;
+      return `The proposed space is served by ${numberToWord(
+        electricUnitsCount
+      )} single packaged electric roof top unit${
+        electricUnitsCount > 1 ? "s" : ""
+      }.`;
     } else {
       // Unknown type (fallback)
-      return `The proposed space is served by ${numberToWord(rtuCount)} single packaged roof top unit${rtuCount > 1 ? "s" : ""}.`;
+      return `The proposed space is served by ${numberToWord(
+        rtuCount
+      )} single packaged roof top unit${rtuCount > 1 ? "s" : ""}.`;
     }
   };
 
@@ -333,16 +404,21 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
     // Helper: Parse voltage to numeric for comparison
     const parseVoltage = (voltageStr) => {
-      if (!voltageStr || voltageStr === "Unknown" || voltageStr === "Not Available") return 0;
-      // Extract highest number: "480V" → 480, "208Y/120V" → 208, "120/240V" → 240
+      if (
+        !voltageStr ||
+        voltageStr === "Unknown" ||
+        voltageStr === "Not Available"
+      )
+        return 0;
       const matches = voltageStr.match(/\d+/g);
       if (!matches) return 0;
-      return Math.max(...matches.map(n => parseInt(n)));
+      return Math.max(...matches.map((n) => parseInt(n)));
     };
 
     // Helper: Parse amp rating
     const parseAmps = (ampStr) => {
-      if (!ampStr || ampStr === "Unknown" || ampStr === "Not Available") return 0;
+      if (!ampStr || ampStr === "Unknown" || ampStr === "Not Available")
+        return 0;
       const match = ampStr.match(/(\d+)/);
       return match ? parseInt(match[1]) : 0;
     };
@@ -353,26 +429,26 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       return mainBreaker && mainBreaker !== "MLO" && mainBreaker !== "Unknown";
     };
 
-    // STEP 1: Add all transformers first (highest voltage primary)
+    // STEP 1: Add all transformers first (highest voltage primary = Level 0)
     const sortedTransformers = [...transformers].sort((a, b) => {
       const voltA = parseVoltage(a.data?.electrical?.primaryVoltage);
       const voltB = parseVoltage(b.data?.electrical?.primaryVoltage);
       return voltB - voltA;
     });
 
-    sortedTransformers.forEach(t => {
+    sortedTransformers.forEach((t) => {
       sorted.push({
-        type: 'transformer',
+        type: "transformer",
         level: 0,
         voltage: parseVoltage(t.data?.electrical?.primaryVoltage),
         amps: parseAmps(t.data?.electrical?.powerRating),
-        data: t
+        data: t,
       });
     });
 
     // STEP 2: Group panels by voltage level
     const panelsByVoltage = {};
-    panels.forEach(p => {
+    panels.forEach((p) => {
       const voltage = parseVoltage(p.data?.electrical?.voltage);
       if (!panelsByVoltage[voltage]) {
         panelsByVoltage[voltage] = [];
@@ -382,42 +458,60 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
     // STEP 3: Sort voltage groups (highest to lowest)
     const voltageKeys = Object.keys(panelsByVoltage)
-      .map(v => parseInt(v))
+      .map((v) => parseInt(v))
       .sort((a, b) => b - a);
 
-    // STEP 4: Process each voltage level
+    // STEP 4: Process each voltage level (each voltage = new hierarchy level)
     let currentLevel = transformers.length > 0 ? 1 : 0;
 
     voltageKeys.forEach((voltage, voltageIndex) => {
       const panelsAtVoltage = panelsByVoltage[voltage];
 
-      // Sort panels within this voltage level by amp rating (highest first)
+      // Sort panels within this voltage level:
+      // 1. By amp rating (highest first)
+      // 2. If amps equal, prioritize panel with main breaker
+      // 3. If still equal, sort alphabetically by designation
       panelsAtVoltage.sort((a, b) => {
         const ampsA = parseAmps(a.data?.electrical?.busRating);
         const ampsB = parseAmps(b.data?.electrical?.busRating);
 
-        // If amps equal, prioritize panel with main breaker
-        if (ampsA === ampsB) {
-          return hasMainBreaker(b) ? 1 : -1;
+        if (ampsA !== ampsB) {
+          return ampsB - ampsA; // Highest amps first
         }
 
-        return ampsB - ampsA;
+        // If amps equal, prioritize main breaker
+        const hasMainA = hasMainBreaker(a);
+        const hasMainB = hasMainBreaker(b);
+        if (hasMainA !== hasMainB) {
+          return hasMainB ? 1 : -1;
+        }
+
+        // If still equal, sort alphabetically by designation
+        const desigA = (a.data?.panelDesignation || "").toLowerCase();
+        const desigB = (b.data?.panelDesignation || "").toLowerCase();
+        return desigA.localeCompare(desigB);
       });
 
-      // Assign type based on characteristics
+      // Assign type based on electrical hierarchy rules
       panelsAtVoltage.forEach((panel, panelIndex) => {
         const amps = parseAmps(panel.data?.electrical?.busRating);
+        const hasMain = hasMainBreaker(panel);
         const isFirstAtVoltage = panelIndex === 0;
         const isHighestVoltage = voltageIndex === 0;
-        const hasMain = hasMainBreaker(panel);
 
         let type;
+
+        // RULE: Main panel = highest voltage + highest amps + main breaker
         if (isHighestVoltage && isFirstAtVoltage && hasMain) {
-          type = 'main';  // Main service panel
-        } else if (amps >= 200 && hasMain) {
-          type = 'distribution';  // Distribution panel
-        } else {
-          type = 'branch';  // Branch panel
+          type = "main";
+        }
+        // RULE: Distribution = 200A+ with main breaker OR 400A+ regardless
+        else if ((amps >= 200 && hasMain) || amps >= 400) {
+          type = "distribution";
+        }
+        // RULE: Branch = everything else
+        else {
+          type = "branch";
         }
 
         sorted.push({
@@ -425,11 +519,11 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
           level: currentLevel,
           voltage: voltage,
           amps: amps,
-          data: panel
+          data: panel,
         });
       });
 
-      currentLevel++;
+      currentLevel++; // Each voltage level gets its own hierarchy level
     });
 
     return sorted;
@@ -437,92 +531,95 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
   // Generate electrical systems report with hierarchy sorting
   const generateElectricalReport = () => {
-    if (panels.length === 0 && transformers.length === 0) {
-      return "No electrical equipment has been surveyed.";
-    }
+  if (panels.length === 0 && transformers.length === 0) {
+    return "No electrical equipment has been surveyed.";
+  }
 
-    const sortedEquipment = sortElectricalHierarchy(panels, transformers);
+  const sortedEquipment = sortElectricalHierarchy(panels, transformers);
 
-    let narrative = "Electrical Systems:\n\n";
+  let narrative = "Electrical Systems:\n\n";
 
-    // Find the main panel (first panel in hierarchy)
-    const mainEquipment = sortedEquipment.find(e => e.type === 'main');
+  // Find the main panel (first panel in hierarchy with type='main')
+  const mainEquipment = sortedEquipment.find(e => e.type === 'main');
 
-    if (mainEquipment) {
-      const mainData = extractPanelData(mainEquipment.data);
-      narrative += `[USER MUST EDIT: The proposed space is served by a separately metered ${mainData.busRating}, ${mainData.voltage}, ${mainData.phase}, ${mainData.wireConfig || '4-wire'} [fused switch/breaker/disconnect] located in [LOCATION]. The service runs [overhead/underground] in a [SIZE]" conduit to Panelboard "${mainData.panelDesignation}".]\n\n`;
-    }
+  if (mainEquipment) {
+    const mainData = extractPanelData(mainEquipment.data);
+    narrative += `[USER MUST EDIT: The proposed space is served by a separately metered ${mainData.busRating}, ${mainData.voltage}, ${mainData.phase}, ${mainData.wireConfig || '4-wire'} [fused switch/breaker/disconnect] located in [LOCATION]. The service runs [overhead/underground] in a [SIZE]" conduit to Panelboard "${mainData.panelDesignation}".]\n\n`;
+  }
 
-    // Generate descriptions for all equipment in hierarchy order
-    sortedEquipment.forEach((equipment, index) => {
-      const data = equipment.data;
+  // Generate descriptions for all equipment in hierarchy order
+  sortedEquipment.forEach((equipment, index) => {
+    const data = equipment.data;
 
-      if (equipment.type === 'transformer') {
-        const transformerData = extractTransformerData(data);
-        narrative += `Power is supplied by a ${transformerData.powerRating} ${transformerData.primaryVoltage}/${transformerData.secondaryVoltage} transformer (${transformerData.transformerDesignation}) manufactured by ${transformerData.manufacturer} located in ${transformerData.transformerLocation}. The transformer is in ${transformerData.condition.toLowerCase()} condition.`;
+    if (equipment.type === 'transformer') {
+      const transformerData = extractTransformerData(data);
+      narrative += `Power is supplied by a ${transformerData.powerRating} ${transformerData.primaryVoltage}/${transformerData.secondaryVoltage} transformer (${transformerData.transformerDesignation}) manufactured by ${transformerData.manufacturer} located in ${transformerData.transformerLocation}. The transformer is in ${transformerData.condition.toLowerCase()} condition.`;
 
-        // Check if next item is a panel - add connection
-        const nextItem = sortedEquipment[index + 1];
-        if (nextItem && nextItem.type !== 'transformer') {
-          const nextPanel = extractPanelData(nextItem.data);
-          narrative += ` The secondary feeds Panelboard "${nextPanel.panelDesignation}".`;
-        }
-
-        narrative += `\n\n`;
+      // Check if next item is a panel - add connection language
+      const nextItem = sortedEquipment[index + 1];
+      if (nextItem && nextItem.type !== 'transformer') {
+        const nextPanel = extractPanelData(nextItem.data);
+        narrative += ` The secondary feeds Panelboard "${nextPanel.panelDesignation}".`;
       }
 
-      if (equipment.type === 'main' || equipment.type === 'distribution' || equipment.type === 'branch') {
-        const panelData = extractPanelData(data);
+      narrative += `\n\n`;
+    }
 
-        narrative += `Panelboard "${panelData.panelDesignation}" is a ${panelData.busRating} ${panelData.voltage} ${panelData.phase} ${panelData.wireConfig || ''} panel`;
+    if (equipment.type === 'main' || equipment.type === 'distribution' || equipment.type === 'branch') {
+      const panelData = extractPanelData(data);
 
-        if (panelData.mainBreakerSize !== "MLO" && panelData.mainBreakerSize !== "Unknown") {
-          narrative += ` with a ${panelData.mainBreakerSize} main breaker`;
-        } else if (panelData.mainBreakerSize === "MLO") {
-          narrative += ` with main lug only (MLO)`;
-        }
+      narrative += `Panelboard "${panelData.panelDesignation}" is a ${panelData.busRating} ${panelData.voltage} ${panelData.phase} ${panelData.wireConfig || ''} panel`;
 
-        // Look ahead to see if this panel feeds the next one
-        const nextItem = sortedEquipment[index + 1];
-        if (nextItem && (nextItem.voltage < equipment.voltage ||
-            (nextItem.voltage === equipment.voltage && nextItem.amps < equipment.amps))) {
+      if (panelData.mainBreakerSize !== "MLO" && panelData.mainBreakerSize !== "Unknown") {
+        narrative += ` with a ${panelData.mainBreakerSize} main breaker`;
+      } else if (panelData.mainBreakerSize === "MLO") {
+        narrative += ` with main lug only (MLO)`;
+      }
+
+      // Look ahead: does this panel feed the next one?
+      const nextItem = sortedEquipment[index + 1];
+      if (nextItem && nextItem.type !== 'transformer') {
+        // Panel feeds next if: different voltage OR same voltage but lower amps
+        if (nextItem.voltage < equipment.voltage ||
+            (nextItem.voltage === equipment.voltage && nextItem.amps < equipment.amps)) {
           const nextPanel = extractPanelData(nextItem.data);
           narrative += ` and has a subfeed breaker serving Panelboard "${nextPanel.panelDesignation}"`;
         }
-
-        narrative += `.`;
-
-        if (panelData.panelLocation && panelData.panelLocation !== "Unknown Location") {
-          narrative += ` Located in ${panelData.panelLocation}.`;
-        }
-
-        narrative += `\n\n`;
       }
-    });
 
-    // Condition assessment
-    const allGood = panels.every(p => {
-      const pd = extractPanelData(p);
-      return pd.condition === "Good" && !pd.isFPE && !pd.isZinsco && !pd.isChallenger;
-    });
+      narrative += `.`;
 
-    const hasHazardous = panels.some(p => {
-      const pd = extractPanelData(p);
-      return pd.isFPE || pd.isZinsco || pd.isChallenger || pd.condition === "Hazardous";
-    });
+      if (panelData.panelLocation && panelData.panelLocation !== "Unknown Location") {
+        narrative += ` Located in ${panelData.panelLocation}.`;
+      }
 
-    if (hasHazardous) {
-      narrative += "CRITICAL: One or more panels present serious safety hazards and require IMMEDIATE REPLACEMENT.\n\n";
-    } else if (allGood) {
-      narrative += "All electrical equipment is in good condition and should be reused.\n\n";
-    } else {
-      narrative += "Some electrical equipment shows signs of wear and may require replacement or upgrade.\n\n";
+      narrative += `\n\n`;
     }
+  });
 
-    narrative += "[USER ADDS: Telephone service information if applicable]";
+  // Condition assessment
+  const allGood = panels.every(p => {
+    const pd = extractPanelData(p);
+    return pd.condition === "Good" && !pd.isFPE && !pd.isZinsco && !pd.isChallenger;
+  });
 
-    return narrative;
-  };
+  const hasHazardous = panels.some(p => {
+    const pd = extractPanelData(p);
+    return pd.isFPE || pd.isZinsco || pd.isChallenger || pd.condition === "Hazardous";
+  });
+
+  if (hasHazardous) {
+    narrative += "CRITICAL: One or more panels present serious safety hazards and require IMMEDIATE REPLACEMENT.\n\n";
+  } else if (allGood) {
+    narrative += "All electrical equipment is in good condition and should be reused.\n\n";
+  } else {
+    narrative += "Some electrical equipment shows signs of wear and may require replacement or upgrade.\n\n";
+  }
+
+  narrative += "[USER ADDS: Telephone service information if applicable]";
+
+  return narrative;
+};
 
   const electricalSystemsReport = generateElectricalReport();
 
@@ -538,7 +635,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
   // Handle RTU editing
   const startEditingRTU = (rtuId) => {
-    const rtu = rtus.find(r => r.id === rtuId);
+    const rtu = rtus.find((r) => r.id === rtuId);
     if (rtu) {
       const rtuData = extractRTUData(rtu);
       console.log("Starting edit for RTU:", rtuId, "with data:", rtuData);
@@ -561,8 +658,8 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
         ...prev,
         [rtuId]: {
           ...(prev[rtuId] || {}),
-          [field]: value
-        }
+          [field]: value,
+        },
       };
       console.log("Updated editedRTUData:", updated);
       return updated;
@@ -571,7 +668,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
   const saveRTUEdit = (rtuId) => {
     // Handle temp RTUs (live preview) - just update local state, will be saved when user clicks "Save & Add RTU"
-    if (rtuId.startsWith('temp-')) {
+    if (rtuId.startsWith("temp-")) {
       setEditingRTUs((prev) => ({ ...prev, [rtuId]: false }));
       // The edited data stays in editedRTUData and will be used in display
       return;
@@ -592,7 +689,9 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
         return;
       }
 
-      const rtuIndex = projects[projectIndex].rtus.findIndex((r) => r.id === rtuId);
+      const rtuIndex = projects[projectIndex].rtus.findIndex(
+        (r) => r.id === rtuId
+      );
       if (rtuIndex === -1) {
         alert("Error: RTU not found");
         return;
@@ -603,7 +702,9 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
       // Validate that we have edited data
       if (!updatedData) {
-        alert("Error: No edited data found for this RTU. Please try editing again.");
+        alert(
+          "Error: No edited data found for this RTU. Please try editing again."
+        );
         console.error("Missing edited data for RTU:", rtuId);
         console.error("Current editedRTUData:", editedRTUData);
         setEditingRTUs((prev) => ({ ...prev, [rtuId]: false }));
@@ -612,7 +713,10 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       const originalRTU = projects[projectIndex].rtus[rtuIndex];
 
       console.log("=== SAVE RTU EDIT DEBUG ===");
-      console.log("Before save - Total RTU count:", projects[projectIndex].rtus.length);
+      console.log(
+        "Before save - Total RTU count:",
+        projects[projectIndex].rtus.length
+      );
       console.log("Updating RTU ID:", rtuId);
       console.log("Updating RTU at index:", rtuIndex);
       console.log("Updated data:", updatedData);
@@ -640,23 +744,36 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       projects[projectIndex].rtus[rtuIndex] = updatedRTU;
       projects[projectIndex].lastModified = new Date().toISOString();
 
-      console.log("After update - Total RTU count:", projects[projectIndex].rtus.length);
-      console.log("All RTU IDs:", projects[projectIndex].rtus.map(r => ({ id: r.id, number: r.number })));
+      console.log(
+        "After update - Total RTU count:",
+        projects[projectIndex].rtus.length
+      );
+      console.log(
+        "All RTU IDs:",
+        projects[projectIndex].rtus.map((r) => ({ id: r.id, number: r.number }))
+      );
 
       // Save to localStorage
       localStorage.setItem("mep-survey-projects", JSON.stringify(projects));
       console.log("Saved to localStorage successfully");
 
       // Verify the save
-      const verification = JSON.parse(localStorage.getItem("mep-survey-projects"));
-      const verifiedProject = verification.find(p => p.id === project.id);
-      console.log("Verification - RTU count after save:", verifiedProject.rtus.length);
+      const verification = JSON.parse(
+        localStorage.getItem("mep-survey-projects")
+      );
+      const verifiedProject = verification.find((p) => p.id === project.id);
+      console.log(
+        "Verification - RTU count after save:",
+        verifiedProject.rtus.length
+      );
       console.log("=== END DEBUG ===");
 
       // Exit edit mode
       setEditingRTUs((prev) => ({ ...prev, [rtuId]: false }));
 
-      alert(`RTU saved successfully! RTU count: ${verifiedProject.rtus.length}\n\nThe page will now reload to show your changes.`);
+      alert(
+        `RTU saved successfully! RTU count: ${verifiedProject.rtus.length}\n\nThe page will now reload to show your changes.`
+      );
 
       // Reload after user clicks OK
       window.location.reload();
@@ -677,7 +794,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
   // Handle Panel editing
   const startEditingPanel = (panelId) => {
-    const panel = panels.find(p => p.id === panelId);
+    const panel = panels.find((p) => p.id === panelId);
     if (panel) {
       const panelData = extractPanelData(panel);
       setEditedPanelData((prev) => ({ ...prev, [panelId]: panelData }));
@@ -690,14 +807,14 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       ...prev,
       [panelId]: {
         ...(prev[panelId] || {}),
-        [field]: value
-      }
+        [field]: value,
+      },
     }));
   };
 
   const savePanelEdit = (panelId) => {
     // Handle temp panels (live preview) - just update local state
-    if (panelId.startsWith('temp-')) {
+    if (panelId.startsWith("temp-")) {
       setEditingPanels((prev) => ({ ...prev, [panelId]: false }));
       return;
     }
@@ -717,7 +834,9 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
         return;
       }
 
-      const panelIndex = projects[projectIndex].electricalPanels.findIndex((p) => p.id === panelId);
+      const panelIndex = projects[projectIndex].electricalPanels.findIndex(
+        (p) => p.id === panelId
+      );
       if (panelIndex === -1) {
         alert("Error: Panel not found");
         return;
@@ -764,7 +883,9 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
       setEditingPanels((prev) => ({ ...prev, [panelId]: false }));
 
-      alert("Panel saved successfully! The page will now reload to show your changes.");
+      alert(
+        "Panel saved successfully! The page will now reload to show your changes."
+      );
       window.location.reload();
     } catch (error) {
       console.error("Error saving panel edit:", error);
@@ -783,10 +904,13 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
   // Handle Transformer editing
   const startEditingTransformer = (transformerId) => {
-    const transformer = transformers.find(t => t.id === transformerId);
+    const transformer = transformers.find((t) => t.id === transformerId);
     if (transformer) {
       const transformerData = extractTransformerData(transformer);
-      setEditedTransformerData((prev) => ({ ...prev, [transformerId]: transformerData }));
+      setEditedTransformerData((prev) => ({
+        ...prev,
+        [transformerId]: transformerData,
+      }));
       setEditingTransformers((prev) => ({ ...prev, [transformerId]: true }));
     }
   };
@@ -796,14 +920,14 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       ...prev,
       [transformerId]: {
         ...(prev[transformerId] || {}),
-        [field]: value
-      }
+        [field]: value,
+      },
     }));
   };
 
   const saveTransformerEdit = (transformerId) => {
     // Handle temp transformers (live preview) - just update local state
-    if (transformerId.startsWith('temp-')) {
+    if (transformerId.startsWith("temp-")) {
       setEditingTransformers((prev) => ({ ...prev, [transformerId]: false }));
       return;
     }
@@ -823,7 +947,9 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
         return;
       }
 
-      const transformerIndex = projects[projectIndex].transformers.findIndex((t) => t.id === transformerId);
+      const transformerIndex = projects[projectIndex].transformers.findIndex(
+        (t) => t.id === transformerId
+      );
       if (transformerIndex === -1) {
         alert("Error: Transformer not found");
         return;
@@ -836,7 +962,8 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
         return;
       }
 
-      const originalTransformer = projects[projectIndex].transformers[transformerIndex];
+      const originalTransformer =
+        projects[projectIndex].transformers[transformerIndex];
 
       // Preserve ALL original data, only update specific fields
       const updatedTransformer = {
@@ -861,14 +988,17 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
         },
       };
 
-      projects[projectIndex].transformers[transformerIndex] = updatedTransformer;
+      projects[projectIndex].transformers[transformerIndex] =
+        updatedTransformer;
       projects[projectIndex].lastModified = new Date().toISOString();
 
       localStorage.setItem("mep-survey-projects", JSON.stringify(projects));
 
       setEditingTransformers((prev) => ({ ...prev, [transformerId]: false }));
 
-      alert("Transformer saved successfully! The page will now reload to show your changes.");
+      alert(
+        "Transformer saved successfully! The page will now reload to show your changes."
+      );
       window.location.reload();
     } catch (error) {
       console.error("Error saving transformer edit:", error);
@@ -886,7 +1016,13 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
   };
 
   // Early return after all hooks to comply with Rules of Hooks
-  if (!project || (rtus.length === 0 && panels.length === 0 && transformers.length === 0 && !currentExtractedData)) {
+  if (
+    !project ||
+    (rtus.length === 0 &&
+      panels.length === 0 &&
+      transformers.length === 0 &&
+      !currentExtractedData)
+  ) {
     return (
       <div className="card" style={{ padding: "40px", textAlign: "center" }}>
         <h3>No Equipment to Report</h3>
@@ -901,7 +1037,8 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       {isLivePreview && (
         <div
           style={{
-            backgroundColor: equipmentType === "electrical" ? "#28a745" : "#007bff",
+            backgroundColor:
+              equipmentType === "electrical" ? "#28a745" : "#007bff",
             color: "white",
             padding: "10px 20px",
             borderRadius: "8px",
@@ -912,7 +1049,11 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
         >
           🔴 LIVE REPORT PREVIEW •{" "}
           {equipmentType === "electrical"
-            ? `${panelCount} Panel${panelCount > 1 ? "s" : ""}, ${transformerCount} Transformer${transformerCount > 1 ? "s" : ""} Captured`
+            ? `${panelCount} Panel${
+                panelCount > 1 ? "s" : ""
+              }, ${transformerCount} Transformer${
+                transformerCount > 1 ? "s" : ""
+              } Captured`
             : `${rtuCount} RTU${rtuCount > 1 ? "s" : ""} Captured`}
         </div>
       )}
@@ -1008,7 +1149,14 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
       {/* Mechanical Systems - THE MAIN CONTENT WITH EDITING */}
       <div style={{ marginBottom: "30px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "15px",
+          }}
+        >
           <h3
             style={{
               fontSize: "16px",
@@ -1038,7 +1186,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
-                cursor: "pointer"
+                cursor: "pointer",
               }}
             >
               {isEditing ? "✓ Save" : "✏️ Edit"}
@@ -1058,7 +1206,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
               border: "2px solid #007bff",
               borderRadius: "4px",
               fontFamily: "inherit",
-              resize: "vertical"
+              resize: "vertical",
             }}
           />
         ) : (
@@ -1167,10 +1315,12 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
 
               // For temp RTUs (live preview), always use edited data if it exists
               // For saved RTUs, only use edited data when actively editing
-              const isTempRTU = rtu.id.startsWith('temp-');
-              const displayData = (isTempRTU && editedRTUData[rtu.id]) || (isEditingThisRTU && editedRTUData[rtu.id])
-                ? editedRTUData[rtu.id]
-                : rtuData;
+              const isTempRTU = rtu.id.startsWith("temp-");
+              const displayData =
+                (isTempRTU && editedRTUData[rtu.id]) ||
+                (isEditingThisRTU && editedRTUData[rtu.id])
+                  ? editedRTUData[rtu.id]
+                  : rtuData;
 
               return (
                 <tr key={rtu.id}>
@@ -1182,8 +1332,14 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                       <input
                         type="text"
                         value={displayData.manufacturer}
-                        onChange={(e) => updateRTUField(rtu.id, 'manufacturer', e.target.value)}
-                        style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                        onChange={(e) =>
+                          updateRTUField(rtu.id, "manufacturer", e.target.value)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "4px",
+                          fontSize: "13px",
+                        }}
                       />
                     ) : (
                       rtuData.manufacturer
@@ -1194,8 +1350,14 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                       <input
                         type="text"
                         value={displayData.model}
-                        onChange={(e) => updateRTUField(rtu.id, 'model', e.target.value)}
-                        style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                        onChange={(e) =>
+                          updateRTUField(rtu.id, "model", e.target.value)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "4px",
+                          fontSize: "13px",
+                        }}
                       />
                     ) : (
                       rtuData.model
@@ -1206,8 +1368,14 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                       <input
                         type="text"
                         value={displayData.tonnage}
-                        onChange={(e) => updateRTUField(rtu.id, 'tonnage', e.target.value)}
-                        style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                        onChange={(e) =>
+                          updateRTUField(rtu.id, "tonnage", e.target.value)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "4px",
+                          fontSize: "13px",
+                        }}
                       />
                     ) : (
                       rtuData.tonnage
@@ -1218,8 +1386,14 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                       <input
                         type="text"
                         value={displayData.year}
-                        onChange={(e) => updateRTUField(rtu.id, 'year', e.target.value)}
-                        style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                        onChange={(e) =>
+                          updateRTUField(rtu.id, "year", e.target.value)
+                        }
+                        style={{
+                          width: "100%",
+                          padding: "4px",
+                          fontSize: "13px",
+                        }}
                       />
                     ) : (
                       rtuData.year
@@ -1230,8 +1404,14 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                       <input
                         type="number"
                         value={displayData.age}
-                        onChange={(e) => updateRTUField(rtu.id, 'age', e.target.value)}
-                        style={{ width: "60px", padding: "4px", fontSize: "13px" }}
+                        onChange={(e) =>
+                          updateRTUField(rtu.id, "age", e.target.value)
+                        }
+                        style={{
+                          width: "60px",
+                          padding: "4px",
+                          fontSize: "13px",
+                        }}
                       />
                     ) : (
                       `${rtuData.age} years`
@@ -1247,9 +1427,21 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                   >
                     {rtuData.age > 15 ? "Replace" : "OK"}
                   </td>
-                  <td style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
+                  <td
+                    style={{
+                      border: "1px solid #ddd",
+                      padding: "10px",
+                      textAlign: "center",
+                    }}
+                  >
                     {isEditingThisRTU ? (
-                      <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "5px",
+                          justifyContent: "center",
+                        }}
+                      >
                         <button
                           onClick={() => saveRTUEdit(rtu.id)}
                           style={{
@@ -1324,7 +1516,14 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
       {/* Electrical Systems Section - Only show if there are panels */}
       {panels.length > 0 && (
         <div style={{ marginBottom: "30px", marginTop: "40px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "15px",
+            }}
+          >
             <h3
               style={{
                 fontSize: "16px",
@@ -1352,7 +1551,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
-                  cursor: "pointer"
+                  cursor: "pointer",
                 }}
               >
                 {isEditingElectrical ? "✓ Save" : "✏️ Edit"}
@@ -1373,7 +1572,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                 borderRadius: "4px",
                 fontFamily: "inherit",
                 resize: "vertical",
-                whiteSpace: "pre-wrap"
+                whiteSpace: "pre-wrap",
               }}
             />
           ) : (
@@ -1382,7 +1581,7 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                 textAlign: "justify",
                 lineHeight: "1.6",
                 fontSize: "14px",
-                whiteSpace: "pre-wrap"
+                whiteSpace: "pre-wrap",
               }}
             >
               {editedElectricalReport}
@@ -1402,31 +1601,85 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
               >
                 <thead>
                   <tr style={{ backgroundColor: "#f0f0f0" }}>
-                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
                       Transformer
                     </th>
-                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
                       Manufacturer
                     </th>
-                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
                       kVA
                     </th>
-                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
                       Primary
                     </th>
-                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
                       Secondary
                     </th>
-                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
                       Location
                     </th>
-                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
                       Condition
                     </th>
-                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
                       Recommendation
                     </th>
-                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "center",
+                      }}
+                    >
                       Actions
                     </th>
                   </tr>
@@ -1434,92 +1687,182 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                 <tbody>
                   {transformers.map((transformer) => {
                     const transformerData = extractTransformerData(transformer);
-                    const isEditingThisTransformer = editingTransformers[transformer.id];
-                    const isTempTransformer = transformer.id.startsWith('temp-');
-                    const displayData = (isTempTransformer && editedTransformerData[transformer.id]) || (isEditingThisTransformer && editedTransformerData[transformer.id])
-                      ? editedTransformerData[transformer.id]
-                      : transformerData;
+                    const isEditingThisTransformer =
+                      editingTransformers[transformer.id];
+                    const isTempTransformer =
+                      transformer.id.startsWith("temp-");
+                    const displayData =
+                      (isTempTransformer &&
+                        editedTransformerData[transformer.id]) ||
+                      (isEditingThisTransformer &&
+                        editedTransformerData[transformer.id])
+                        ? editedTransformerData[transformer.id]
+                        : transformerData;
 
                     return (
                       <tr key={transformer.id}>
-                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        <td
+                          style={{ border: "1px solid #ddd", padding: "10px" }}
+                        >
                           {isEditingThisTransformer ? (
                             <input
                               type="text"
                               value={displayData.transformerDesignation}
-                              onChange={(e) => updateTransformerField(transformer.id, 'transformerDesignation', e.target.value)}
-                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                              onChange={(e) =>
+                                updateTransformerField(
+                                  transformer.id,
+                                  "transformerDesignation",
+                                  e.target.value
+                                )
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "4px",
+                                fontSize: "13px",
+                              }}
                             />
                           ) : (
                             transformerData.transformerDesignation
                           )}
                         </td>
-                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        <td
+                          style={{ border: "1px solid #ddd", padding: "10px" }}
+                        >
                           {isEditingThisTransformer ? (
                             <input
                               type="text"
                               value={displayData.manufacturer}
-                              onChange={(e) => updateTransformerField(transformer.id, 'manufacturer', e.target.value)}
-                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                              onChange={(e) =>
+                                updateTransformerField(
+                                  transformer.id,
+                                  "manufacturer",
+                                  e.target.value
+                                )
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "4px",
+                                fontSize: "13px",
+                              }}
                             />
                           ) : (
                             transformerData.manufacturer
                           )}
                         </td>
-                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        <td
+                          style={{ border: "1px solid #ddd", padding: "10px" }}
+                        >
                           {isEditingThisTransformer ? (
                             <input
                               type="text"
                               value={displayData.powerRating}
-                              onChange={(e) => updateTransformerField(transformer.id, 'powerRating', e.target.value)}
-                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                              onChange={(e) =>
+                                updateTransformerField(
+                                  transformer.id,
+                                  "powerRating",
+                                  e.target.value
+                                )
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "4px",
+                                fontSize: "13px",
+                              }}
                             />
                           ) : (
                             transformerData.powerRating
                           )}
                         </td>
-                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        <td
+                          style={{ border: "1px solid #ddd", padding: "10px" }}
+                        >
                           {isEditingThisTransformer ? (
                             <input
                               type="text"
                               value={displayData.primaryVoltage}
-                              onChange={(e) => updateTransformerField(transformer.id, 'primaryVoltage', e.target.value)}
-                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                              onChange={(e) =>
+                                updateTransformerField(
+                                  transformer.id,
+                                  "primaryVoltage",
+                                  e.target.value
+                                )
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "4px",
+                                fontSize: "13px",
+                              }}
                             />
                           ) : (
                             transformerData.primaryVoltage
                           )}
                         </td>
-                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        <td
+                          style={{ border: "1px solid #ddd", padding: "10px" }}
+                        >
                           {isEditingThisTransformer ? (
                             <input
                               type="text"
                               value={displayData.secondaryVoltage}
-                              onChange={(e) => updateTransformerField(transformer.id, 'secondaryVoltage', e.target.value)}
-                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                              onChange={(e) =>
+                                updateTransformerField(
+                                  transformer.id,
+                                  "secondaryVoltage",
+                                  e.target.value
+                                )
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "4px",
+                                fontSize: "13px",
+                              }}
                             />
                           ) : (
                             transformerData.secondaryVoltage
                           )}
                         </td>
-                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        <td
+                          style={{ border: "1px solid #ddd", padding: "10px" }}
+                        >
                           {isEditingThisTransformer ? (
                             <input
                               type="text"
                               value={displayData.transformerLocation}
-                              onChange={(e) => updateTransformerField(transformer.id, 'transformerLocation', e.target.value)}
-                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                              onChange={(e) =>
+                                updateTransformerField(
+                                  transformer.id,
+                                  "transformerLocation",
+                                  e.target.value
+                                )
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "4px",
+                                fontSize: "13px",
+                              }}
                             />
                           ) : (
                             transformerData.transformerLocation
                           )}
                         </td>
-                        <td style={{ border: "1px solid #ddd", padding: "10px" }}>
+                        <td
+                          style={{ border: "1px solid #ddd", padding: "10px" }}
+                        >
                           {isEditingThisTransformer ? (
                             <select
                               value={displayData.condition}
-                              onChange={(e) => updateTransformerField(transformer.id, 'condition', e.target.value)}
-                              style={{ width: "100%", padding: "4px", fontSize: "13px" }}
+                              onChange={(e) =>
+                                updateTransformerField(
+                                  transformer.id,
+                                  "condition",
+                                  e.target.value
+                                )
+                              }
+                              style={{
+                                width: "100%",
+                                padding: "4px",
+                                fontSize: "13px",
+                              }}
                             >
                               <option value="Good">Good</option>
                               <option value="Fair">Fair</option>
@@ -1533,17 +1876,36 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                           style={{
                             border: "1px solid #ddd",
                             padding: "10px",
-                            color: transformerData.condition === "Poor" ? "#d32f2f" : "#388e3c",
+                            color:
+                              transformerData.condition === "Poor"
+                                ? "#d32f2f"
+                                : "#388e3c",
                             fontWeight: "bold",
                           }}
                         >
-                          {transformerData.condition === "Poor" ? "Monitor" : "Reuse"}
+                          {transformerData.condition === "Poor"
+                            ? "Monitor"
+                            : "Reuse"}
                         </td>
-                        <td style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
+                        <td
+                          style={{
+                            border: "1px solid #ddd",
+                            padding: "10px",
+                            textAlign: "center",
+                          }}
+                        >
                           {isEditingThisTransformer ? (
-                            <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: "5px",
+                                justifyContent: "center",
+                              }}
+                            >
                               <button
-                                onClick={() => saveTransformerEdit(transformer.id)}
+                                onClick={() =>
+                                  saveTransformerEdit(transformer.id)
+                                }
                                 style={{
                                   padding: "4px 8px",
                                   fontSize: "12px",
@@ -1557,7 +1919,9 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                                 ✓ Save
                               </button>
                               <button
-                                onClick={() => cancelTransformerEdit(transformer.id)}
+                                onClick={() =>
+                                  cancelTransformerEdit(transformer.id)
+                                }
                                 style={{
                                   padding: "4px 8px",
                                   fontSize: "12px",
@@ -1573,7 +1937,9 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
                             </div>
                           ) : (
                             <button
-                              onClick={() => startEditingTransformer(transformer.id)}
+                              onClick={() =>
+                                startEditingTransformer(transformer.id)
+                              }
                               style={{
                                 padding: "4px 8px",
                                 fontSize: "12px",
@@ -1601,219 +1967,407 @@ const ReportGenerator = ({ project, squareFootage, isLivePreview = false, curren
           {panels.length > 0 && (
             <div style={{ marginTop: "30px" }}>
               <h4 style={{ marginBottom: "15px" }}>Panel Summary:</h4>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                fontSize: "13px",
-              }}
-            >
-              <thead>
-                <tr style={{ backgroundColor: "#f0f0f0" }}>
-                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
-                    Panel
-                  </th>
-                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
-                    Auto-Detected Hierarchy
-                  </th>
-                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
-                    Manufacturer
-                  </th>
-                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
-                    Bus Rating
-                  </th>
-                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
-                    Voltage
-                  </th>
-                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
-                    Main Breaker
-                  </th>
-                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
-                    Condition
-                  </th>
-                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
-                    Recommendation
-                  </th>
-                  <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortElectricalHierarchy(panels, transformers)
-                  .filter(e => e.type !== 'transformer')  // Transformers have separate table
-                  .map((equipment, index) => {
-                  const panel = equipment.data;
-                  const panelData = extractPanelData(panel);
-                  const isEditingThisPanel = editingPanels[panel.id];
-                  const isTempPanel = panel.id.startsWith('temp-');
-                  const displayData = (isTempPanel && editedPanelData[panel.id]) || (isEditingThisPanel && editedPanelData[panel.id])
-                    ? editedPanelData[panel.id]
-                    : panelData;
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontSize: "13px",
+                }}
+              >
+                <thead>
+                  <tr style={{ backgroundColor: "#f0f0f0" }}>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
+                      Panel
+                    </th>
+                    <th style={{ border: "1px solid #ddd", padding: "10px", textAlign: "left" }}>
+  Hierarchy
+</th>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
+                      Manufacturer
+                    </th>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
+                      Bus Rating
+                    </th>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
+                      Voltage
+                    </th>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
+                      Main Breaker
+                    </th>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
+                      Condition
+                    </th>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "left",
+                      }}
+                    >
+                      Recommendation
+                    </th>
+                    <th
+                      style={{
+                        border: "1px solid #ddd",
+                        padding: "10px",
+                        textAlign: "center",
+                      }}
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortElectricalHierarchy(panels, transformers)
+                    .filter((e) => e.type !== "transformer") // Transformers have separate table
+                    .map((equipment, index) => {
+                      const panel = equipment.data;
+                      const panelData = extractPanelData(panel);
+                      const isEditingThisPanel = editingPanels[panel.id];
+                      const isTempPanel = panel.id.startsWith("temp-");
+                      const displayData =
+                        (isTempPanel && editedPanelData[panel.id]) ||
+                        (isEditingThisPanel && editedPanelData[panel.id])
+                          ? editedPanelData[panel.id]
+                          : panelData;
 
-                  const needsReplacement = panelData.isFPE || panelData.isZinsco || panelData.isChallenger || panelData.condition === "Hazardous";
+                      const needsReplacement =
+                        panelData.isFPE ||
+                        panelData.isZinsco ||
+                        panelData.isChallenger ||
+                        panelData.condition === "Hazardous";
 
-                  return (
-                    <tr key={panel.id} style={{ backgroundColor: needsReplacement ? "#ffebee" : "transparent" }}>
-                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                        {isEditingThisPanel ? (
-                          <input
-                            type="text"
-                            value={displayData.panelDesignation}
-                            onChange={(e) => updatePanelField(panel.id, 'panelDesignation', e.target.value)}
-                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
-                          />
-                        ) : (
-                          panelData.panelDesignation
-                        )}
-                      </td>
-                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                            {equipment.type === 'main' && <span title="Main Service Panel">🔴</span>}
-                            {equipment.type === 'distribution' && <span title="Distribution Panel">🟡</span>}
-                            {equipment.type === 'branch' && <span title="Branch Panel">🟢</span>}
-                            <strong>
-                              {equipment.type === 'main' && 'Main'}
-                              {equipment.type === 'distribution' && 'Distribution'}
-                              {equipment.type === 'branch' && 'Branch'}
-                            </strong>
-                          </div>
-                          <span style={{ fontSize: "11px", color: "#666" }}>
-                            L{equipment.level} • {equipment.voltage}V • {equipment.amps}A
-                          </span>
-                        </div>
-                      </td>
-                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                        {isEditingThisPanel ? (
-                          <input
-                            type="text"
-                            value={displayData.manufacturer}
-                            onChange={(e) => updatePanelField(panel.id, 'manufacturer', e.target.value)}
-                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
-                          />
-                        ) : (
-                          panelData.manufacturer
-                        )}
-                      </td>
-                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                        {isEditingThisPanel ? (
-                          <input
-                            type="text"
-                            value={displayData.busRating}
-                            onChange={(e) => updatePanelField(panel.id, 'busRating', e.target.value)}
-                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
-                          />
-                        ) : (
-                          panelData.busRating
-                        )}
-                      </td>
-                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                        {isEditingThisPanel ? (
-                          <input
-                            type="text"
-                            value={displayData.voltage}
-                            onChange={(e) => updatePanelField(panel.id, 'voltage', e.target.value)}
-                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
-                          />
-                        ) : (
-                          panelData.voltage
-                        )}
-                      </td>
-                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                        {isEditingThisPanel ? (
-                          <input
-                            type="text"
-                            value={displayData.mainBreakerSize}
-                            onChange={(e) => updatePanelField(panel.id, 'mainBreakerSize', e.target.value)}
-                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
-                          />
-                        ) : (
-                          panelData.mainBreakerSize
-                        )}
-                      </td>
-                      <td style={{ border: "1px solid #ddd", padding: "10px" }}>
-                        {isEditingThisPanel ? (
-                          <select
-                            value={displayData.condition}
-                            onChange={(e) => updatePanelField(panel.id, 'condition', e.target.value)}
-                            style={{ width: "100%", padding: "4px", fontSize: "13px" }}
-                          >
-                            <option value="Good">Good</option>
-                            <option value="Fair">Fair</option>
-                            <option value="Poor">Poor</option>
-                            <option value="Hazardous">Hazardous</option>
-                          </select>
-                        ) : (
-                          panelData.condition
-                        )}
-                      </td>
-                      <td
-                        style={{
-                          border: "1px solid #ddd",
-                          padding: "10px",
-                          color: needsReplacement ? "#d32f2f" : "#388e3c",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {needsReplacement ? "REPLACE" : "Reuse"}
-                      </td>
-                      <td style={{ border: "1px solid #ddd", padding: "10px", textAlign: "center" }}>
-                        {isEditingThisPanel ? (
-                          <div style={{ display: "flex", gap: "5px", justifyContent: "center" }}>
-                            <button
-                              onClick={() => savePanelEdit(panel.id)}
-                              style={{
-                                padding: "4px 8px",
-                                fontSize: "12px",
-                                backgroundColor: "#28a745",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                              }}
-                            >
-                              ✓ Save
-                            </button>
-                            <button
-                              onClick={() => cancelPanelEdit(panel.id)}
-                              style={{
-                                padding: "4px 8px",
-                                fontSize: "12px",
-                                backgroundColor: "#6c757d",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                              }}
-                            >
-                              ✕ Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => startEditingPanel(panel.id)}
+                      return (
+                        <tr
+                          key={panel.id}
+                          style={{
+                            backgroundColor: needsReplacement
+                              ? "#ffebee"
+                              : "transparent",
+                          }}
+                        >
+                          <td
                             style={{
-                              padding: "4px 8px",
-                              fontSize: "12px",
-                              backgroundColor: "#007bff",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
+                              border: "1px solid #ddd",
+                              padding: "10px",
                             }}
-                            title="Edit Panel"
                           >
-                            ✏️ Edit
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                            {isEditingThisPanel ? (
+                              <input
+                                type="text"
+                                value={displayData.panelDesignation}
+                                onChange={(e) =>
+                                  updatePanelField(
+                                    panel.id,
+                                    "panelDesignation",
+                                    e.target.value
+                                  )
+                                }
+                                style={{
+                                  width: "100%",
+                                  padding: "4px",
+                                  fontSize: "13px",
+                                }}
+                              />
+                            ) : (
+                              panelData.panelDesignation
+                            )}
+                          </td>
+                          <td
+                            style={{
+                              border: "1px solid #ddd",
+                              padding: "10px",
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "5px",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "5px",
+                                }}
+                              >
+                                {equipment.type === "main" && (
+                                  <span title="Main Service Panel">🔴</span>
+                                )}
+                                {equipment.type === "distribution" && (
+                                  <span title="Distribution Panel">🟡</span>
+                                )}
+                                {equipment.type === "branch" && (
+                                  <span title="Branch Panel">🟢</span>
+                                )}
+                                <strong>
+                                  {equipment.type === "main" && "Main"}
+                                  {equipment.type === "distribution" &&
+                                    "Distribution"}
+                                  {equipment.type === "branch" && "Branch"}
+                                </strong>
+                              </div>
+                              <span style={{ fontSize: "11px", color: "#666" }}>
+                                L{equipment.level} • {equipment.voltage}V •{" "}
+                                {equipment.amps}A
+                              </span>
+                            </div>
+                          </td>
+                          <td
+                            style={{
+                              border: "1px solid #ddd",
+                              padding: "10px",
+                            }}
+                          >
+                            {isEditingThisPanel ? (
+                              <input
+                                type="text"
+                                value={displayData.manufacturer}
+                                onChange={(e) =>
+                                  updatePanelField(
+                                    panel.id,
+                                    "manufacturer",
+                                    e.target.value
+                                  )
+                                }
+                                style={{
+                                  width: "100%",
+                                  padding: "4px",
+                                  fontSize: "13px",
+                                }}
+                              />
+                            ) : (
+                              panelData.manufacturer
+                            )}
+                          </td>
+                          <td
+                            style={{
+                              border: "1px solid #ddd",
+                              padding: "10px",
+                            }}
+                          >
+                            {isEditingThisPanel ? (
+                              <input
+                                type="text"
+                                value={displayData.busRating}
+                                onChange={(e) =>
+                                  updatePanelField(
+                                    panel.id,
+                                    "busRating",
+                                    e.target.value
+                                  )
+                                }
+                                style={{
+                                  width: "100%",
+                                  padding: "4px",
+                                  fontSize: "13px",
+                                }}
+                              />
+                            ) : (
+                              panelData.busRating
+                            )}
+                          </td>
+                          <td
+                            style={{
+                              border: "1px solid #ddd",
+                              padding: "10px",
+                            }}
+                          >
+                            {isEditingThisPanel ? (
+                              <input
+                                type="text"
+                                value={displayData.voltage}
+                                onChange={(e) =>
+                                  updatePanelField(
+                                    panel.id,
+                                    "voltage",
+                                    e.target.value
+                                  )
+                                }
+                                style={{
+                                  width: "100%",
+                                  padding: "4px",
+                                  fontSize: "13px",
+                                }}
+                              />
+                            ) : (
+                              panelData.voltage
+                            )}
+                          </td>
+                          <td
+                            style={{
+                              border: "1px solid #ddd",
+                              padding: "10px",
+                            }}
+                          >
+                            {isEditingThisPanel ? (
+                              <input
+                                type="text"
+                                value={displayData.mainBreakerSize}
+                                onChange={(e) =>
+                                  updatePanelField(
+                                    panel.id,
+                                    "mainBreakerSize",
+                                    e.target.value
+                                  )
+                                }
+                                style={{
+                                  width: "100%",
+                                  padding: "4px",
+                                  fontSize: "13px",
+                                }}
+                              />
+                            ) : (
+                              panelData.mainBreakerSize
+                            )}
+                          </td>
+                          <td
+                            style={{
+                              border: "1px solid #ddd",
+                              padding: "10px",
+                            }}
+                          >
+                            {isEditingThisPanel ? (
+                              <select
+                                value={displayData.condition}
+                                onChange={(e) =>
+                                  updatePanelField(
+                                    panel.id,
+                                    "condition",
+                                    e.target.value
+                                  )
+                                }
+                                style={{
+                                  width: "100%",
+                                  padding: "4px",
+                                  fontSize: "13px",
+                                }}
+                              >
+                                <option value="Good">Good</option>
+                                <option value="Fair">Fair</option>
+                                <option value="Poor">Poor</option>
+                                <option value="Hazardous">Hazardous</option>
+                              </select>
+                            ) : (
+                              panelData.condition
+                            )}
+                          </td>
+                          <td
+                            style={{
+                              border: "1px solid #ddd",
+                              padding: "10px",
+                              color: needsReplacement ? "#d32f2f" : "#388e3c",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {needsReplacement ? "REPLACE" : "Reuse"}
+                          </td>
+                          <td
+                            style={{
+                              border: "1px solid #ddd",
+                              padding: "10px",
+                              textAlign: "center",
+                            }}
+                          >
+                            {isEditingThisPanel ? (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: "5px",
+                                  justifyContent: "center",
+                                }}
+                              >
+                                <button
+                                  onClick={() => savePanelEdit(panel.id)}
+                                  style={{
+                                    padding: "4px 8px",
+                                    fontSize: "12px",
+                                    backgroundColor: "#28a745",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  ✓ Save
+                                </button>
+                                <button
+                                  onClick={() => cancelPanelEdit(panel.id)}
+                                  style={{
+                                    padding: "4px 8px",
+                                    fontSize: "12px",
+                                    backgroundColor: "#6c757d",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  ✕ Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => startEditingPanel(panel.id)}
+                                style={{
+                                  padding: "4px 8px",
+                                  fontSize: "12px",
+                                  backgroundColor: "#007bff",
+                                  color: "white",
+                                  border: "none",
+                                  borderRadius: "4px",
+                                  cursor: "pointer",
+                                }}
+                                title="Edit Panel"
+                              >
+                                ✏️ Edit
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -1909,6 +2463,7 @@ export default React.memo(ReportGenerator, (prevProps, nextProps) => {
     prevProps.currentTransformerNumber === nextProps.currentTransformerNumber &&
     prevProps.equipmentType === nextProps.equipmentType &&
     prevProps.currentEquipmentSubtype === nextProps.currentEquipmentSubtype &&
-    JSON.stringify(prevProps.currentUserInputs) === JSON.stringify(nextProps.currentUserInputs)
+    JSON.stringify(prevProps.currentUserInputs) ===
+      JSON.stringify(nextProps.currentUserInputs)
   );
 });
