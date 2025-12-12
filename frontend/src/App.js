@@ -107,8 +107,7 @@ function AppContent() {
         <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
           <p style={{ margin: "0 0 10px 0" }}>MEP Survey AI Agent</p>
           <p style={{ margin: 0 }}>
-            Status: {isOnline ? "🟢 Online" : "🔴 Offline"} | API:{" "}
-            {apiConnected ? "✅ Connected" : "❌ Disconnected"} | Built for
+            Status: {isOnline ? "🟢 Online" : "🔴 Offline"} | Built for
             fieldwork • Powered by AWS • Enhanced by AI
           </p>
         </div>
