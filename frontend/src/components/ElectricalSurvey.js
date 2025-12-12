@@ -2,6 +2,7 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ReportGenerator from "./ReportGenerator";
+import ImageDropZone from "./ImageDropZone";
 
 const ElectricalSurvey = () => {
   const { projectId } = useParams();
@@ -14,7 +15,7 @@ const ElectricalSurvey = () => {
   const fileInputRef = useRef(null);
 
   const [stream, setStream] = useState(null);
-  const [capturedImage, setCapturedImage] = useState(null);
+  const [capturedImages, setCapturedImages] = useState([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
   const [error, setError] = useState(null);
@@ -288,7 +289,7 @@ const ElectricalSurvey = () => {
         return;
       }
 
-      setCapturedImage(imageData);
+      setCapturedImages(prev => [...prev, imageData]);
       stopCamera();
     } catch (error) {
       setError(`Capture failed: ${error.message}`);
@@ -308,12 +309,20 @@ const ElectricalSurvey = () => {
   };
 
   const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
+    const files = Array.from(event.target.files);
+    files.forEach(file => {
       const reader = new FileReader();
-      reader.onload = (e) => setCapturedImage(e.target.result);
+      reader.onload = (e) => setCapturedImages(prev => [...prev, e.target.result]);
       reader.readAsDataURL(file);
-    }
+    });
+  };
+
+  const handleImagesAdded = (newImages) => {
+    setCapturedImages(prev => [...prev, ...newImages]);
+  };
+
+  const removeImage = (indexToRemove) => {
+    setCapturedImages(prev => prev.filter((_, index) => index !== indexToRemove));
   };
 
   const uploadAndAnalyze = async () => {
@@ -324,7 +333,8 @@ const ElectricalSurvey = () => {
       const apiUrl =
         process.env.REACT_APP_API_URL ||
         "https://jqyt5l9x73.execute-api.us-east-1.amazonaws.com/prod";
-      const base64Data = capturedImage.split(",")[1];
+      // Use the first image for analysis
+      const base64Data = capturedImages[0].split(",")[1];
 
       // Send correct equipment type to Lambda: 'electrical' for panels, 'transformer' for transformers
       const lambdaEquipmentType = equipmentType === "transformer" ? "transformer" : "electrical";
@@ -364,7 +374,7 @@ const ElectricalSurvey = () => {
 
     if (saveSuccess) {
       // Reset for next capture
-      setCapturedImage(null);
+      setCapturedImages([]);
       setExtractedData(null);
       setError(null);
       // Reload project to get updated counts
@@ -471,7 +481,7 @@ const ElectricalSurvey = () => {
             </div>
           )}
 
-          {!capturedImage ? (
+          {capturedImages.length === 0 && !extractedData ? (
             <div>
               {/* Equipment Type Selector */}
               <div className="card" style={{ marginBottom: "20px" }}>
@@ -657,15 +667,32 @@ const ElectricalSurvey = () => {
                 </div>
               </div>
 
+              {/* Drag and Drop / Upload Section */}
               <div className="card" style={{ marginBottom: "20px" }}>
                 <h3 style={{ margin: "0 0 15px 0" }}>
-                  Capture{" "}
+                  Upload{" "}
                   {equipmentType === "transformer"
                     ? `Transformer #${currentTransformerNumber}`
                     : `Panel #${currentPanelNumber}`}{" "}
-                  Nameplate:
+                  Photos:
                 </h3>
-                <div style={{ display: "flex", gap: "15px" }}>
+
+                {/* Tab buttons for Camera vs Upload */}
+                <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
+                  <button
+                    onClick={() => setCaptureMethod("upload")}
+                    className="btn"
+                    style={{
+                      flex: 1,
+                      padding: "15px",
+                      backgroundColor:
+                        captureMethod === "upload" ? "#28a745" : "white",
+                      color: captureMethod === "upload" ? "white" : "#333",
+                      border: "2px solid #28a745",
+                    }}
+                  >
+                    📁 Drag & Drop / Browse
+                  </button>
                   <button
                     onClick={() => setCaptureMethod("camera")}
                     className="btn"
@@ -673,31 +700,22 @@ const ElectricalSurvey = () => {
                       flex: 1,
                       padding: "15px",
                       backgroundColor:
-                        captureMethod === "camera" ? "#28a745" : "white",
+                        captureMethod === "camera" ? "#17a2b8" : "white",
                       color: captureMethod === "camera" ? "white" : "#333",
-                      border: "2px solid #28a745",
+                      border: "2px solid #17a2b8",
                     }}
                   >
                     📱 Use Camera
                   </button>
-                  <button
-                    onClick={() => {
-                      setCaptureMethod("upload");
-                      fileInputRef.current?.click();
-                    }}
-                    className="btn"
-                    style={{
-                      flex: 1,
-                      padding: "15px",
-                      backgroundColor:
-                        captureMethod === "upload" ? "#17a2b8" : "white",
-                      color: captureMethod === "upload" ? "white" : "#333",
-                      border: "2px solid #17a2b8",
-                    }}
-                  >
-                    💻 Upload File
-                  </button>
                 </div>
+
+                {/* Drag and Drop Zone */}
+                {captureMethod === "upload" && (
+                  <ImageDropZone
+                    onImagesAdded={handleImagesAdded}
+                    existingImages={capturedImages}
+                  />
+                )}
 
                 {captureMethod === "camera" && !cameraStarted && (
                   <button
@@ -848,79 +866,182 @@ const ElectricalSurvey = () => {
               />
               <canvas ref={canvasRef} style={{ display: "none" }} />
             </div>
-          ) : (
+          ) : capturedImages.length > 0 && !extractedData ? (
             <div>
-              <div
-                className="card"
-                style={{ padding: 0, marginBottom: "20px" }}
-              >
-                <img
-                  src={capturedImage}
-                  alt="Panel nameplate"
-                  style={{
-                    width: "100%",
-                    maxHeight: "60vh",
-                    objectFit: "contain",
-                  }}
-                />
+              {/* Image Gallery */}
+              <div className="card" style={{ marginBottom: "20px" }}>
+                <h3 style={{ margin: "0 0 15px 0" }}>
+                  {capturedImages.length} Photo{capturedImages.length !== 1 ? 's' : ''} Uploaded
+                </h3>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "15px", marginBottom: "20px" }}>
+                  {capturedImages.map((image, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        position: "relative",
+                        paddingBottom: "100%",
+                        backgroundColor: "#f0f0f0",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        border: "2px solid #ddd",
+                      }}
+                    >
+                      <img
+                        src={image}
+                        alt={`Panel ${index + 1}`}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "5px",
+                          left: "5px",
+                          backgroundColor: index === 0 ? "#28a745" : "rgba(0,0,0,0.7)",
+                          color: "white",
+                          borderRadius: "4px",
+                          padding: "4px 8px",
+                          fontSize: "12px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {index === 0 ? "PRIMARY" : `#${index + 1}`}
+                      </div>
+                      <button
+                        onClick={() => removeImage(index)}
+                        style={{
+                          position: "absolute",
+                          top: "5px",
+                          right: "5px",
+                          backgroundColor: "#dc3545",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "28px",
+                          height: "28px",
+                          cursor: "pointer",
+                          fontSize: "16px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add More Photos Button */}
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    onClick={() => {
+                      setCaptureMethod("upload");
+                      fileInputRef.current?.click();
+                    }}
+                    className="btn"
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      backgroundColor: "#17a2b8",
+                      color: "white",
+                    }}
+                  >
+                    📁 Add More Photos
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCaptureMethod("camera");
+                      startCamera();
+                    }}
+                    className="btn"
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      backgroundColor: "#17a2b8",
+                      color: "white",
+                    }}
+                  >
+                    📷 Take Another Photo
+                  </button>
+                </div>
               </div>
 
-              {/* Show user inputs summary */}
-              {!extractedData && (
-                <div className="card" style={{ marginBottom: "20px" }}>
-                  <h3 style={{ margin: "0 0 15px 0" }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleFileUpload}
+                style={{ display: "none" }}
+              />
+
+              {/* Show user inputs summary and Analyze button */}
+              <div className="card" style={{ marginBottom: "20px" }}>
+                <h3 style={{ margin: "0 0 15px 0" }}>
+                  {equipmentType === "transformer"
+                    ? "Transformer Information Summary:"
+                    : "Panel Information Summary:"}
+                </h3>
+                <p>
+                  <strong>
                     {equipmentType === "transformer"
-                      ? "Transformer Information Summary:"
-                      : "Panel Information Summary:"}
-                  </h3>
-                  <p>
-                    <strong>
-                      {equipmentType === "transformer"
-                        ? "Transformer Designation:"
-                        : "Panel Designation:"}
-                    </strong>{" "}
-                    {userInputs.panelDesignation}
-                  </p>
-                  <p>
-                    <strong>Location:</strong> {userInputs.panelLocation}
-                  </p>
-                  <p>
-                    <strong>Condition:</strong> {userInputs.condition}
-                  </p>
+                      ? "Transformer Designation:"
+                      : "Panel Designation:"}
+                  </strong>{" "}
+                  {userInputs.panelDesignation}
+                </p>
+                <p>
+                  <strong>Location:</strong> {userInputs.panelLocation}
+                </p>
+                <p>
+                  <strong>Condition:</strong> {userInputs.condition}
+                </p>
+                <p style={{ fontSize: "14px", color: "#666", marginTop: "10px" }}>
+                  <strong>Note:</strong> The PRIMARY photo will be used for AI analysis. Additional photos are for documentation.
+                </p>
 
-                  <div
-                    style={{ display: "flex", gap: "15px", marginTop: "20px" }}
+                <div
+                  style={{ display: "flex", gap: "15px", marginTop: "20px" }}
+                >
+                  <button
+                    onClick={() => {
+                      setCapturedImages([]);
+                      setError(null);
+                    }}
+                    className="btn"
+                    style={{
+                      backgroundColor: "#6c757d",
+                      color: "white",
+                      padding: "12px 24px",
+                    }}
                   >
-                    <button
-                      onClick={() => {
-                        setCapturedImage(null);
-                        setError(null);
-                      }}
-                      className="btn"
-                      style={{
-                        backgroundColor: "#6c757d",
-                        color: "white",
-                        padding: "12px 24px",
-                      }}
-                    >
-                      🔄 Retake
-                    </button>
-                    <button
-                      onClick={uploadAndAnalyze}
-                      disabled={analyzing}
-                      className="btn btn-success"
-                      style={{
-                        flex: 1,
-                        padding: "12px 24px",
-                        opacity: analyzing ? 0.6 : 1,
-                      }}
-                    >
-                      {analyzing ? "Analyzing..." : "🤖 Analyze Nameplate"}
-                    </button>
-                  </div>
+                    🔄 Clear All Photos
+                  </button>
+                  <button
+                    onClick={uploadAndAnalyze}
+                    disabled={analyzing || capturedImages.length === 0}
+                    className="btn btn-success"
+                    style={{
+                      flex: 1,
+                      padding: "12px 24px",
+                      opacity: analyzing || capturedImages.length === 0 ? 0.6 : 1,
+                    }}
+                  >
+                    {analyzing ? "Analyzing..." : "🤖 Analyze Nameplate"}
+                  </button>
                 </div>
-              )}
-
+              </div>
+            </div>
+          ) : (
+            <div>
               {extractedData && (
                 <div>
                   {/* Safety Warning - ONLY FOR PANELS (not transformers) */}
