@@ -31,7 +31,7 @@ const ProjectList = () => {
         setShowReportFor(project);
       }
     }
-  }, [projects]);
+  }, [reportProjectId, projects]);
 
   const loadProjects = () => {
     const savedProjects = localStorage.getItem("mep-survey-projects");
