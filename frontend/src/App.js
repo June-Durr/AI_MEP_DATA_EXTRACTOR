@@ -1,5 +1,5 @@
 // src/App.js - Updated with routing
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import {
   BrowserRouter as Router,
   Route,
@@ -10,6 +10,7 @@ import {
 import Camera from "./components/Camera";
 import ElectricalSurvey from "./components/ElectricalSurvey";
 import ProjectList from "./components/ProjectList";
+import ErrorBoundary from "./components/ErrorBoundary";
 import "./App.css";
 
 function AppContent() {
@@ -87,12 +88,22 @@ function AppContent() {
       </nav>
 
       {/* Main Content */}
-      <Routes>
-        <Route path="/" element={<ProjectList />} />
-        <Route path="/camera" element={<Camera />} />
-        <Route path="/camera/:projectId" element={<Camera />} />
-        <Route path="/electrical/:projectId" element={<ElectricalSurvey />} />
-      </Routes>
+      <ErrorBoundary>
+        <Suspense fallback={
+          <div className="container">
+            <div className="card" style={{ textAlign: "center", padding: "60px 20px" }}>
+              <h2>Loading...</h2>
+            </div>
+          </div>
+        }>
+          <Routes>
+            <Route path="/" element={<ProjectList />} />
+            <Route path="/camera" element={<Camera />} />
+            <Route path="/camera/:projectId" element={<Camera />} />
+            <Route path="/electrical/:projectId" element={<ElectricalSurvey />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
 
       {/* Footer */}
       <footer

@@ -7,6 +7,8 @@ const Camera = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
 
+  console.log('[Camera] Component rendered, projectId:', projectId);
+
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -34,16 +36,23 @@ const Camera = () => {
 
   // Load project function wrapped in useCallback
   const loadProject = useCallback(() => {
+    console.log('[Camera] loadProject called, projectId:', projectId);
     const savedProjects = localStorage.getItem("mep-survey-projects");
     if (savedProjects) {
       const projects = JSON.parse(savedProjects);
+      console.log('[Camera] All projects:', projects);
       const foundProject = projects.find((p) => p.id === projectId);
+      console.log('[Camera] Found project:', foundProject);
       if (foundProject) {
         setProject(foundProject);
         const rtus = foundProject.rtus || [];
         setProjectRTUs(rtus);
         setCurrentRTUNumber(rtus.length + 1);
+      } else {
+        console.warn('[Camera] Project not found with id:', projectId);
       }
+    } else {
+      console.warn('[Camera] No saved projects in localStorage');
     }
   }, [projectId]);
 
@@ -327,7 +336,10 @@ const Camera = () => {
   // Gas pipe size options
   const gasPipeSizes = ['3/4"', '1"', '1 1/4"', '1 1/2"'];
 
+  console.log('[Camera] Render check - projectId:', projectId, 'project:', project);
+
   if (!projectId) {
+    console.log('[Camera] No projectId, showing error message');
     return (
       <div className="container">
         <div

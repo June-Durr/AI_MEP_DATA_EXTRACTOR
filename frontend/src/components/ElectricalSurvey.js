@@ -7,6 +7,8 @@ const ElectricalSurvey = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
 
+  console.log('[ElectricalSurvey] Component rendered, projectId:', projectId);
+
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -39,10 +41,13 @@ const ElectricalSurvey = () => {
 
   // Load project function wrapped in useCallback
   const loadProject = useCallback(() => {
+    console.log('[ElectricalSurvey] loadProject called, projectId:', projectId);
     const savedProjects = localStorage.getItem("mep-survey-projects");
     if (savedProjects) {
       const projects = JSON.parse(savedProjects);
+      console.log('[ElectricalSurvey] All projects:', projects);
       const foundProject = projects.find((p) => p.id === projectId);
+      console.log('[ElectricalSurvey] Found project:', foundProject);
       if (foundProject) {
         setProject(foundProject);
         const panels = foundProject.electricalPanels || [];
@@ -51,7 +56,11 @@ const ElectricalSurvey = () => {
         setProjectTransformers(transformers);
         setCurrentPanelNumber(panels.length + 1);
         setCurrentTransformerNumber(transformers.length + 1);
+      } else {
+        console.warn('[ElectricalSurvey] Project not found with id:', projectId);
       }
+    } else {
+      console.warn('[ElectricalSurvey] No saved projects in localStorage');
     }
   }, [projectId]);
 
@@ -381,7 +390,10 @@ const ElectricalSurvey = () => {
     navigate(`/?report=${projectId}`);
   };
 
+  console.log('[ElectricalSurvey] Render check - projectId:', projectId, 'project:', project);
+
   if (!projectId) {
+    console.log('[ElectricalSurvey] No projectId, showing error message');
     return (
       <div className="container">
         <div
