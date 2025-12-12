@@ -348,6 +348,12 @@ const ElectricalSurvey = () => {
       // Send correct equipment type to Lambda: 'electrical' for panels, 'transformer' for transformers
       const lambdaEquipmentType = equipmentType === "transformer" ? "transformer" : "electrical";
 
+      console.log('[ElectricalSurvey] Sending to API:', {
+        equipmentType: lambdaEquipmentType,
+        selectedEquipment: equipmentType,
+        imageCount: capturedImages.length
+      });
+
       // If multiple images, analyze each and combine results
       // For now, we'll send all images and use the first for primary analysis
       const allBase64Images = capturedImages.map(img => img.split(",")[1]);
