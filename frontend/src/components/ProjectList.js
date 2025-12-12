@@ -31,7 +31,7 @@ const ProjectList = () => {
         setShowReportFor(project);
       }
     }
-  }, [reportProjectId]);
+  }, [projects]);
 
   const loadProjects = () => {
     const savedProjects = localStorage.getItem("mep-survey-projects");
@@ -109,7 +109,14 @@ const ProjectList = () => {
   if (showReportFor) {
     return (
       <div className="container">
-        <div style={{ display: "flex", gap: "15px", marginBottom: "20px", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "15px",
+            marginBottom: "20px",
+            flexWrap: "wrap",
+          }}
+        >
           <button
             onClick={() => setShowReportFor(null)}
             className="btn"
@@ -160,9 +167,13 @@ const ProjectList = () => {
             <h1 style={{ margin: "0 0 5px 0" }}>MEP Survey Projects</h1>
             <p style={{ margin: 0, color: "#666" }}>
               {projects.length} project{projects.length !== 1 ? "s" : ""} •{" "}
-              {projects.reduce((sum, p) => sum + (p.rtus?.length || 0), 0)} RTUs •{" "}
-              {projects.reduce((sum, p) => sum + (p.electricalPanels?.length || 0), 0)} Panels
-              {" "}captured
+              {projects.reduce((sum, p) => sum + (p.rtus?.length || 0), 0)} RTUs
+              •{" "}
+              {projects.reduce(
+                (sum, p) => sum + (p.electricalPanels?.length || 0),
+                0
+              )}{" "}
+              Panels captured
             </p>
           </div>
           <button
@@ -526,7 +537,9 @@ const ProjectList = () => {
                 <div
                   style={{
                     backgroundColor:
-                      project.electricalPanels?.length > 0 ? "#28a745" : "#6c757d",
+                      project.electricalPanels?.length > 0
+                        ? "#28a745"
+                        : "#6c757d",
                     color: "white",
                     padding: "8px 12px",
                     borderRadius: "20px",
@@ -566,7 +579,9 @@ const ProjectList = () => {
               }}
             >
               {/* First row - HVAC and Electrical survey buttons */}
-              <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+              <div
+                style={{ display: "flex", gap: "10px", marginBottom: "10px" }}
+              >
                 <button
                   onClick={() => continueProject(project.id)}
                   className="btn btn-primary"
@@ -582,7 +597,7 @@ const ProjectList = () => {
                     padding: "10px",
                     fontSize: "14px",
                     backgroundColor: "#28a745",
-                    color: "white"
+                    color: "white",
                   }}
                 >
                   ⚡ Electrical Survey
@@ -591,7 +606,8 @@ const ProjectList = () => {
 
               {/* Second row - View Report and Delete buttons */}
               <div style={{ display: "flex", gap: "10px" }}>
-                {(project.rtus?.length > 0 || project.electricalPanels?.length > 0) && (
+                {(project.rtus?.length > 0 ||
+                  project.electricalPanels?.length > 0) && (
                   <button
                     onClick={() => viewReport(project)}
                     className="btn btn-success"
