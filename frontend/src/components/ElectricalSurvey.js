@@ -326,6 +326,16 @@ const ElectricalSurvey = () => {
     setCapturedImages(prev => prev.filter((_, index) => index !== indexToRemove));
   };
 
+  const moveImageToFirst = (indexToMove) => {
+    if (indexToMove === 0) return; // Already first
+    setCapturedImages(prev => {
+      const newImages = [...prev];
+      const [movedImage] = newImages.splice(indexToMove, 1);
+      newImages.unshift(movedImage);
+      return newImages;
+    });
+  };
+
   const uploadAndAnalyze = async () => {
     setAnalyzing(true);
     setError(null);
@@ -898,17 +908,36 @@ const ElectricalSurvey = () => {
                   {capturedImages.length} Photo{capturedImages.length !== 1 ? 's' : ''} Ready for Analysis
                 </h3>
 
+                <div style={{ marginBottom: "15px", padding: "10px", backgroundColor: "#e7f3ff", borderRadius: "8px" }}>
+                  <p style={{ margin: "0", fontSize: "14px", color: "#0066cc" }}>
+                    💡 <strong>Tip:</strong> Click on any photo to make it PRIMARY (used for AI analysis). This is useful if your nameplate photo doesn't show all details.
+                  </p>
+                </div>
+
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "15px", marginBottom: "20px" }}>
                   {capturedImages.map((image, index) => (
                     <div
                       key={index}
+                      onClick={() => moveImageToFirst(index)}
                       style={{
                         position: "relative",
                         paddingBottom: "100%",
                         backgroundColor: "#f0f0f0",
                         borderRadius: "8px",
                         overflow: "hidden",
-                        border: "2px solid #ddd",
+                        border: index === 0 ? "3px solid #28a745" : "2px solid #ddd",
+                        cursor: index === 0 ? "default" : "pointer",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (index !== 0) {
+                          e.currentTarget.style.border = "3px solid #007bff";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (index !== 0) {
+                          e.currentTarget.style.border = "2px solid #ddd";
+                        }
                       }}
                     >
                       <img
@@ -936,10 +965,13 @@ const ElectricalSurvey = () => {
                           fontWeight: "bold",
                         }}
                       >
-                        {index === 0 ? "PRIMARY" : `#${index + 1}`}
+                        {index === 0 ? "PRIMARY ✓" : `#${index + 1} - Click to Analyze`}
                       </div>
                       <button
-                        onClick={() => removeImage(index)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeImage(index);
+                        }}
                         style={{
                           position: "absolute",
                           top: "5px",
@@ -955,13 +987,40 @@ const ElectricalSurvey = () => {
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
+                          zIndex: 10,
                         }}
                       >
                         ×
                       </button>
+                      {index !== 0 && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            bottom: "5px",
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            backgroundColor: "rgba(0,123,255,0.9)",
+                            color: "white",
+                            borderRadius: "4px",
+                            padding: "4px 8px",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            opacity: 0,
+                            transition: "opacity 0.2s",
+                          }}
+                          className="click-to-select-hint"
+                        >
+                          Click to make PRIMARY
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
+                <style>{`
+                  .click-to-select-hint:hover {
+                    opacity: 1 !important;
+                  }
+                `}</style>
 
                 {/* Add More Photos Button - Opens Drag & Drop */}
                 <button
