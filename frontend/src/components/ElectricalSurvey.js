@@ -371,14 +371,28 @@ const ElectricalSurvey = () => {
 
       const responseData = await response.json();
 
+      console.log('[ElectricalSurvey] AI Response:', responseData);
+
       if (responseData.success) {
+        console.log('[ElectricalSurvey] Extracted data:', responseData.data);
+
+        // Check if data is empty or all fields are "Not Available"
+        const hasData = responseData.data && Object.keys(responseData.data).length > 0;
+
+        if (!hasData) {
+          throw new Error("AI returned no data. The image may be unclear or not showing a panel nameplate. Try using a clearer photo or different angle.");
+        }
+
         setExtractedData(responseData.data);
         setShowUploadZone(false); // Hide upload zone after successful analysis
       } else {
-        throw new Error(responseData.error || "Analysis failed");
+        const errorMsg = responseData.error || "Analysis failed";
+        console.error('[ElectricalSurvey] Analysis error:', errorMsg);
+        throw new Error(errorMsg);
       }
     } catch (error) {
-      setError(`Analysis failed: ${error.message}`);
+      console.error('[ElectricalSurvey] Error:', error);
+      setError(`Analysis failed: ${error.message}. Please check the console (F12) for more details.`);
     } finally {
       setAnalyzing(false);
     }
