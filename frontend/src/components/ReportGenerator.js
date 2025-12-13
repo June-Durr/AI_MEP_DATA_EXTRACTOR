@@ -474,44 +474,45 @@ const ReportGenerator = ({
       let level = 0;
       let panelType = "branch";
 
-      // RULE 1: Match panel to transformer by secondary voltage
-      const matchingTransformer = hierarchy.find(
+      // RULE 1: First check if there are existing panels at same voltage with higher amps
+      // (Panel-to-panel relationship takes priority over transformer-to-panel)
+      const potentialPanelParents = hierarchy.filter(
         (item) =>
-          item.type === "transformer" &&
-          normalizeVoltage(item.data.data?.electrical?.secondaryVoltage) === panelMeta.voltageNormalized
+          item.type !== "transformer" &&
+          item.voltageNormalized === panelMeta.voltageNormalized &&
+          item.amps > panelMeta.amps
       );
 
-      if (matchingTransformer) {
-        // Panel matches transformer secondary voltage
-        parentId = matchingTransformer.data.id;
-        level = 1;
+      if (potentialPanelParents.length > 0) {
+        // RULE 1A: Panel feeds this panel (same voltage, higher amps)
+        const parent = potentialPanelParents.reduce((closest, current) => {
+          const closestDiff = Math.abs(closest.amps - panelMeta.amps);
+          const currentDiff = Math.abs(current.amps - panelMeta.amps);
+          return currentDiff < closestDiff ? current : closest;
+        });
 
-        // First panel fed by transformer = Main panel
-        if (matchingTransformer.children.length === 0 && panelMeta.hasMain) {
-          panelType = "main";
-        } else if (panelMeta.amps >= 200 || panelMeta.hasMain) {
-          panelType = "distribution";
-        }
+        parentId = parent.data.id;
+        level = parent.level + 1;  // Increment from parent level
+        panelType = panelMeta.amps >= 200 ? "distribution" : "branch";
       } else {
-        // RULE 2: Match panel to another panel (same voltage, lower amperage)
-        const potentialParents = hierarchy.filter(
+        // RULE 2: No panel parent found, check for transformer match
+        const matchingTransformer = hierarchy.find(
           (item) =>
-            item.type !== "transformer" &&
-            item.voltageNormalized === panelMeta.voltageNormalized &&
-            item.amps > panelMeta.amps
+            item.type === "transformer" &&
+            normalizeVoltage(item.data.data?.electrical?.secondaryVoltage) === panelMeta.voltageNormalized
         );
 
-        if (potentialParents.length > 0) {
-          // Choose parent with closest higher amperage
-          const parent = potentialParents.reduce((closest, current) => {
-            const closestDiff = Math.abs(closest.amps - panelMeta.amps);
-            const currentDiff = Math.abs(current.amps - panelMeta.amps);
-            return currentDiff < closestDiff ? current : closest;
-          });
+        if (matchingTransformer) {
+          // RULE 2A: Transformer feeds this panel
+          parentId = matchingTransformer.data.id;
+          level = 1;
 
-          parentId = parent.data.id;
-          level = parent.level + 1;
-          panelType = panelMeta.amps >= 200 ? "distribution" : "branch";
+          // First panel fed by transformer = Main panel
+          if (matchingTransformer.children.length === 0 && panelMeta.hasMain) {
+            panelType = "main";
+          } else if (panelMeta.amps >= 200 || panelMeta.hasMain) {
+            panelType = "distribution";
+          }
         } else {
           // RULE 3: No parent found - treat as independent main/distribution
           level = transformers.length > 0 ? 1 : 0;
