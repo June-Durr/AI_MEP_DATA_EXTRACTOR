@@ -83,7 +83,9 @@ const ProjectList = () => {
       spaceDescription: "",
     });
 
-    navigate(`/camera/${project.id}`);
+    // Don't auto-navigate - let user choose HVAC or Electrical from project card
+    // The new project will appear at the top of the list with both options
+    loadProjects(); // Reload to show the new project
   };
 
   const deleteProject = (projectId) => {
@@ -462,7 +464,7 @@ const ProjectList = () => {
               className="btn btn-success"
               style={{ flex: 1, padding: "12px 24px" }}
             >
-              Create Project & Start Survey
+              ✓ Create Project
             </button>
           </div>
         </div>
