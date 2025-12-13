@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Panel Classification Test</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #f5f5f5; }
+    .test { margin: 20px 0; padding: 15px; background: white; border-radius: 8px; }
+    .pass { color: #28a745; font-weight: bold; }
+    .fail { color: #dc3545; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th, td { padding: 10px; text-align: left; border: 1px solid #ddd; }
+    th { background: #007bff; color: white; }
+    .main { background: #d1ecf1; }
+    .distribution { background: #fff3cd; }
+    .branch { background: #d4edda; }
+  </style>
+</head>
+<body>
+  <h1>🔌 Panel Classification Test</h1>
+
+  <div class="test">
+    <h2>Test Scenario</h2>
+    <p>Testing classification with:</p>
+    <ul>
+      <li>Transformer: 480V → 208V, 75 kVA</li>
+      <li>Panel P1: 225A, 208V, Has Main Breaker ✓</li>
+      <li>Panel P2: 100A, 208V, Has Main Breaker ✓, Feeds P3</li>
+      <li>Panel P3: 60A, 208V, MLO (No Main Breaker)</li>
+    </ul>
+  </div>
+
+  <div class="test" id="results">
+    <h2>Classification Results</h2>
+    <p>Running classification test...</p>
+  </div>
+
+  <script>
+    // Simplified classification logic (matches ReportGenerator.js)
+    function classifyPanels(hierarchy) {
+      hierarchy.forEach((item) => {
+        if (item.type === "transformer") return;
+
+        const hasMainBreaker = item.hasMainBreaker;
+        const hasChildren = item.children.length > 0;
+        const amps = item.amps;
+        const level = item.level;
+
+        if (level === 1) {
+          const otherLevel1Panels = hierarchy.filter(h => h.level === 1 && h.type === "pending");
+          const isHighestAmp = otherLevel1Panels.every(p => p === item || item.amps >= p.amps);
+
+          if (isHighestAmp && hasMainBreaker) {
+            item.type = "main";
+          } else if (hasMainBreaker && (amps >= 200 || hasChildren)) {
+            item.type = "distribution";
+          } else if (amps >= 200) {
+            item.type = "distribution";
+          } else {
+            item.type = "branch";
+          }
+        } else {
+          if (hasMainBreaker && (amps >= 200 || hasChildren)) {
+            item.type = "distribution";
+          } else if (amps >= 200 && hasChildren) {
+            item.type = "distribution";
+          } else {
+            item.type = "branch";
+          }
+        }
+      });
+
+      return hierarchy;
+    }
+
+    function runTest() {
+      // Build hierarchy manually
+      const hierarchy = [
+        {
+          type: "transformer",
+          level: 0,
+          designation: "T1",
+          voltage: "480V → 208V",
+          children: ["p1"]
+        },
+        {
+          type: "pending",
+          level: 1,
+          id: "p1",
+          designation: "P1",
+          amps: 225,
+          voltage: "208V",
+          hasMainBreaker: true,
+          parentId: "t1",
+          children: ["p2"]
+        },
+        {
+          type: "pending",
+          level: 2,
+          id: "p2",
+          designation: "P2",
+          amps: 100,
+          voltage: "208V",
+          hasMainBreaker: true,
+          parentId: "p1",
+          children: ["p3"]
+        },
+        {
+          type: "pending",
+          level: 3,
+          id: "p3",
+          designation: "P3",
+          amps: 60,
+          voltage: "208V",
+          hasMainBreaker: false, // MLO
+          parentId: "p2",
+          children: []
+        }
+      ];
+
+      // Run classification
+      classifyPanels(hierarchy);
+
+      // Display results
+      let html = '<h3>Expected Classifications:</h3>';
+      html += '<table>';
+      html += '<tr><th>Panel</th><th>Level</th><th>Amps</th><th>Main Breaker</th><th>Feeds</th><th>Expected Type</th><th>Actual Type</th><th>Status</th></tr>';
+
+      const expectations = [
+        { id: "p1", expected: "main", reason: "L1, 225A (highest), has main breaker" },
+        { id: "p2", expected: "distribution", reason: "L2, 100A, has main breaker, feeds P3" },
+        { id: "p3", expected: "branch", reason: "L3, 60A, MLO, no subfeeds" }
+      ];
+
+      expectations.forEach(exp => {
+        const item = hierarchy.find(h => h.id === exp.id);
+        const pass = item.type === exp.expected;
+        const statusClass = pass ? 'pass' : 'fail';
+        const statusText = pass ? '✓ PASS' : '✗ FAIL';
+        const rowClass = exp.expected;
+
+        html += `<tr class="${rowClass}">`;
+        html += `<td><strong>${item.designation}</strong></td>`;
+        html += `<td>L${item.level}</td>`;
+        html += `<td>${item.amps}A</td>`;
+        html += `<td>${item.hasMainBreaker ? '✓ Yes' : '✗ No (MLO)'}</td>`;
+        html += `<td>${item.children.length > 0 ? item.children.map(c => hierarchy.find(h => h.id === c)?.designation || c).join(', ') : 'None'}</td>`;
+        html += `<td>${exp.expected.toUpperCase()}</td>`;
+        html += `<td>${item.type.toUpperCase()}</td>`;
+        html += `<td class="${statusClass}">${statusText}</td>`;
+        html += '</tr>';
+      });
+
+      html += '</table>';
+
+      html += '<h3>Classification Rules Applied:</h3>';
+      html += '<ul>';
+      html += '<li><strong class="main">🔵 Main:</strong> Level 1 + highest amps + main breaker</li>';
+      html += '<li><strong class="distribution">🟡 Distribution:</strong> Has main breaker AND (200A+ OR feeds other panels)</li>';
+      html += '<li><strong class="branch">🟢 Branch:</strong> Everything else (MLO or no subfeeds)</li>';
+      html += '</ul>';
+
+      // Test assertions
+      const allPass = expectations.every(exp => {
+        const item = hierarchy.find(h => h.id === exp.id);
+        return item.type === exp.expected;
+      });
+
+      html += `<h3>${allPass ? '<span class="pass">✅ ALL TESTS PASSED</span>' : '<span class="fail">❌ SOME TESTS FAILED</span>'}</h3>`;
+
+      if (allPass) {
+        html += '<p style="color: #28a745; font-weight: bold;">The classification logic is working correctly!</p>';
+        html += '<ul>';
+        html += '<li>✓ P1 (225A, main breaker, L1) → MAIN</li>';
+        html += '<li>✓ P2 (100A, main breaker, feeds P3) → DISTRIBUTION</li>';
+        html += '<li>✓ P3 (60A, MLO, no subfeeds) → BRANCH</li>';
+        html += '</ul>';
+      }
+
+      document.getElementById('results').innerHTML = html;
+    }
+
+    runTest();
+  </script>
+</body>
+</html>

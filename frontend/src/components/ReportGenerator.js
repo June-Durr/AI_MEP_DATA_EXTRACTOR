@@ -467,12 +467,11 @@ const ReportGenerator = ({
       return 0;
     });
 
-    // STEP 3: Assign parents and build tree
+    // STEP 3: Assign parents and build tree (First Pass: Structure)
     panelsWithMetadata.forEach((panelMeta, index) => {
       const panel = panelMeta.panel;
       let parentId = null;
       let level = 0;
-      let panelType = "branch";
 
       // RULE 1: First check if there are existing panels at same voltage with higher amps
       // (Panel-to-panel relationship takes priority over transformer-to-panel)
@@ -493,7 +492,6 @@ const ReportGenerator = ({
 
         parentId = parent.data.id;
         level = parent.level + 1;  // Increment from parent level
-        panelType = panelMeta.amps >= 200 ? "distribution" : "branch";
       } else {
         // RULE 2: No panel parent found, check for transformer match
         const matchingTransformer = hierarchy.find(
@@ -506,30 +504,19 @@ const ReportGenerator = ({
           // RULE 2A: Transformer feeds this panel
           parentId = matchingTransformer.data.id;
           level = 1;
-
-          // First panel fed by transformer = Main panel
-          if (matchingTransformer.children.length === 0 && panelMeta.hasMain) {
-            panelType = "main";
-          } else if (panelMeta.amps >= 200 || panelMeta.hasMain) {
-            panelType = "distribution";
-          }
         } else {
-          // RULE 3: No parent found - treat as independent main/distribution
+          // RULE 3: No parent found - treat as independent
           level = transformers.length > 0 ? 1 : 0;
-          if (panelMeta.amps >= 200 && panelMeta.hasMain) {
-            panelType = "main";
-          } else if (panelMeta.amps >= 200) {
-            panelType = "distribution";
-          }
         }
       }
 
       const equipmentNode = {
-        type: panelType,
+        type: "pending", // Will be determined in second pass
         level: level,
         voltage: panelMeta.voltage,
         voltageNormalized: panelMeta.voltageNormalized,
         amps: panelMeta.amps,
+        hasMainBreaker: panelMeta.hasMain,
         data: panel,
         parentId: parentId,
         children: [],
@@ -542,6 +529,46 @@ const ReportGenerator = ({
         const parent = hierarchy.find((item) => item.data.id === parentId);
         if (parent) {
           parent.children.push(panel.id);
+        }
+      }
+    });
+
+    // STEP 4: Classify panel types (Second Pass: Classification)
+    hierarchy.forEach((item) => {
+      if (item.type === "transformer") return; // Skip transformers
+
+      const hasMainBreaker = item.hasMainBreaker;
+      const hasChildren = item.children.length > 0;
+      const amps = item.amps;
+      const level = item.level;
+
+      // Classification Rules:
+      // 1. Main Panel: Level 1 + highest amps at that level + main breaker
+      // 2. Distribution: Has main breaker AND (200A+ OR feeds other panels)
+      // 3. Branch: Everything else (MLO or no subfeeds)
+
+      if (level === 1) {
+        // Level 1 panels (fed directly by transformer or utility)
+        const otherLevel1Panels = hierarchy.filter(h => h.level === 1 && h.type === "pending");
+        const isHighestAmp = otherLevel1Panels.every(p => p === item || item.amps >= p.amps);
+
+        if (isHighestAmp && hasMainBreaker) {
+          item.type = "main";
+        } else if (hasMainBreaker && (amps >= 200 || hasChildren)) {
+          item.type = "distribution";
+        } else if (amps >= 200) {
+          item.type = "distribution";
+        } else {
+          item.type = "branch";
+        }
+      } else {
+        // Level 2+ panels (fed by other panels)
+        if (hasMainBreaker && (amps >= 200 || hasChildren)) {
+          item.type = "distribution";
+        } else if (amps >= 200 && hasChildren) {
+          item.type = "distribution";
+        } else {
+          item.type = "branch";
         }
       }
     });
