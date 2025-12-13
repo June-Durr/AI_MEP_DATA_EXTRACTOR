@@ -22,9 +22,13 @@ exports.handler = async (event) => {
 
   try {
     let body = JSON.parse(event.body);
-    const { imageBase64, equipmentType } = body;
+    const { imageBase64, images, equipmentType } = body;
+
+    // Support both single image (imageBase64) and multiple images (images array)
+    const imagesToAnalyze = images && images.length > 0 ? images : [imageBase64];
 
     console.log(`Equipment type: ${equipmentType}`);
+    console.log(`Number of images to analyze: ${imagesToAnalyze.length}`);
 
     // COMPREHENSIVE PROMPT WITH JSON-ONLY ENFORCEMENT AND SERIAL NUMBER DECODING
     const comprehensivePrompt = `You are an expert MEP engineer analyzing an HVAC equipment nameplate. Extract ALL visible information and return it in the exact JSON format below.
@@ -633,24 +637,38 @@ Extract all visible information from the transformer nameplate. Be realistic abo
 
     const content = [];
 
-    if (imageBase64 === "test") {
+    if (imagesToAnalyze[0] === "test") {
       content.push({
         type: "text",
         text: "This is a test. Respond with 'Lambda is working!'",
       });
     } else {
+      // Add the prompt first
       content.push({
         type: "text",
         text: selectedPrompt,
       });
-      content.push({
-        type: "image",
-        source: {
-          type: "base64",
-          media_type: "image/jpeg",
-          data: imageBase64,
-        },
-      });
+
+      // Add ALL images to the content array
+      // This allows Claude to see all images of the same panel for better analysis
+      for (let i = 0; i < imagesToAnalyze.length; i++) {
+        content.push({
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: "image/jpeg",
+            data: imagesToAnalyze[i],
+          },
+        });
+      }
+
+      // Add instruction to analyze all images
+      if (imagesToAnalyze.length > 1) {
+        content.push({
+          type: "text",
+          text: `You have been provided with ${imagesToAnalyze.length} images of the same equipment. Analyze ALL images to extract information. Use whichever image shows the nameplate most clearly. Combine information from all images if needed.`,
+        });
+      }
     }
 
     const response = await bedrock

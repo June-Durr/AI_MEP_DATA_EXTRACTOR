@@ -354,20 +354,18 @@ const ElectricalSurvey = () => {
         imageCount: capturedImages.length
       });
 
-      // If multiple images, analyze each and combine results
-      // For now, we'll send all images and use the first for primary analysis
+      // Extract base64 data from all images (remove data:image/jpeg;base64, prefix)
       const allBase64Images = capturedImages.map(img => img.split(",")[1]);
 
-      // Send the first image as the primary image
-      // In future, Lambda could accept multiple images
+      // Send ALL images to Lambda for comprehensive analysis
+      // The AI will analyze all images and extract information from the clearest one
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageBase64: allBase64Images[0],
+          images: allBase64Images,  // Send all images
+          imageBase64: allBase64Images[0],  // Keep for backward compatibility
           equipmentType: lambdaEquipmentType,
-          // Include count of additional images for reference
-          additionalImagesCount: allBase64Images.length - 1,
         }),
       });
 

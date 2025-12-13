@@ -398,27 +398,29 @@ const ReportGenerator = ({
       : ""
   } The majority of ductwork in the space is interior insulated rectangular sheet metal ductwork with insulated flexible diffuser connections.`;
 
-  // Sort electrical equipment by hierarchy using AI-powered detection
-  const sortElectricalHierarchy = (panels, transformers) => {
-    const sorted = [];
+  // Build electrical hierarchy tree with automatic parent-child detection
+  const buildElectricalHierarchy = (panels, transformers) => {
+    const hierarchy = [];
 
     // Helper: Parse voltage to numeric for comparison
     const parseVoltage = (voltageStr) => {
-      if (
-        !voltageStr ||
-        voltageStr === "Unknown" ||
-        voltageStr === "Not Available"
-      )
-        return 0;
+      if (!voltageStr || voltageStr === "Unknown" || voltageStr === "Not Available") return 0;
+      // Extract all numbers and return the highest (e.g., "208Y/120V" → 208)
       const matches = voltageStr.match(/\d+/g);
       if (!matches) return 0;
       return Math.max(...matches.map((n) => parseInt(n)));
     };
 
+    // Helper: Normalize voltage string for matching (e.g., "208Y/120V" → "208")
+    const normalizeVoltage = (voltageStr) => {
+      if (!voltageStr || voltageStr === "Unknown" || voltageStr === "Not Available") return "";
+      // Get the primary voltage number
+      return parseVoltage(voltageStr).toString();
+    };
+
     // Helper: Parse amp rating
     const parseAmps = (ampStr) => {
-      if (!ampStr || ampStr === "Unknown" || ampStr === "Not Available")
-        return 0;
+      if (!ampStr || ampStr === "Unknown" || ampStr === "Not Available") return 0;
       const match = ampStr.match(/(\d+)/);
       return match ? parseInt(match[1]) : 0;
     };
@@ -426,107 +428,129 @@ const ReportGenerator = ({
     // Helper: Detect if panel has main breaker (vs MLO)
     const hasMainBreaker = (panel) => {
       const mainBreaker = panel.data?.incomingTermination?.mainBreakerSize;
-      return mainBreaker && mainBreaker !== "MLO" && mainBreaker !== "Unknown";
+      return mainBreaker && mainBreaker !== "MLO" && mainBreaker !== "Unknown" && mainBreaker !== "Not Available";
     };
 
-    // STEP 1: Add all transformers first (highest voltage primary = Level 0)
+    // STEP 1: Add transformers as root nodes (Level 0)
     const sortedTransformers = [...transformers].sort((a, b) => {
       const voltA = parseVoltage(a.data?.electrical?.primaryVoltage);
       const voltB = parseVoltage(b.data?.electrical?.primaryVoltage);
-      return voltB - voltA;
+      return voltB - voltA; // Highest voltage first
     });
 
     sortedTransformers.forEach((t) => {
-      sorted.push({
+      hierarchy.push({
         type: "transformer",
         level: 0,
-        voltage: parseVoltage(t.data?.electrical?.primaryVoltage),
+        voltage: parseVoltage(t.data?.electrical?.secondaryVoltage), // Use SECONDARY voltage for matching
         amps: parseAmps(t.data?.electrical?.powerRating),
         data: t,
+        parentId: null,
+        children: [],
       });
     });
 
-    // STEP 2: Group panels by voltage level
-    const panelsByVoltage = {};
-    panels.forEach((p) => {
-      const voltage = parseVoltage(p.data?.electrical?.voltage);
-      if (!panelsByVoltage[voltage]) {
-        panelsByVoltage[voltage] = [];
+    // STEP 2: Build panel hierarchy based on voltage and amperage matching
+    const panelsWithMetadata = panels.map((p) => ({
+      panel: p,
+      voltage: parseVoltage(p.data?.electrical?.voltage),
+      voltageNormalized: normalizeVoltage(p.data?.electrical?.voltage),
+      amps: parseAmps(p.data?.electrical?.busRating),
+      hasMain: hasMainBreaker(p),
+    }));
+
+    // Sort panels by voltage (high to low), then by amperage (high to low)
+    panelsWithMetadata.sort((a, b) => {
+      if (a.voltage !== b.voltage) return b.voltage - a.voltage;
+      if (a.amps !== b.amps) return b.amps - a.amps;
+      if (a.hasMain !== b.hasMain) return a.hasMain ? -1 : 1;
+      return 0;
+    });
+
+    // STEP 3: Assign parents and build tree
+    panelsWithMetadata.forEach((panelMeta, index) => {
+      const panel = panelMeta.panel;
+      let parentId = null;
+      let level = 0;
+      let panelType = "branch";
+
+      // RULE 1: Match panel to transformer by secondary voltage
+      const matchingTransformer = hierarchy.find(
+        (item) =>
+          item.type === "transformer" &&
+          normalizeVoltage(item.data.data?.electrical?.secondaryVoltage) === panelMeta.voltageNormalized
+      );
+
+      if (matchingTransformer) {
+        // Panel matches transformer secondary voltage
+        parentId = matchingTransformer.data.id;
+        level = 1;
+
+        // First panel fed by transformer = Main panel
+        if (matchingTransformer.children.length === 0 && panelMeta.hasMain) {
+          panelType = "main";
+        } else if (panelMeta.amps >= 200 || panelMeta.hasMain) {
+          panelType = "distribution";
+        }
+      } else {
+        // RULE 2: Match panel to another panel (same voltage, lower amperage)
+        const potentialParents = hierarchy.filter(
+          (item) =>
+            item.type !== "transformer" &&
+            item.voltageNormalized === panelMeta.voltageNormalized &&
+            item.amps > panelMeta.amps
+        );
+
+        if (potentialParents.length > 0) {
+          // Choose parent with closest higher amperage
+          const parent = potentialParents.reduce((closest, current) => {
+            const closestDiff = Math.abs(closest.amps - panelMeta.amps);
+            const currentDiff = Math.abs(current.amps - panelMeta.amps);
+            return currentDiff < closestDiff ? current : closest;
+          });
+
+          parentId = parent.data.id;
+          level = parent.level + 1;
+          panelType = panelMeta.amps >= 200 ? "distribution" : "branch";
+        } else {
+          // RULE 3: No parent found - treat as independent main/distribution
+          level = transformers.length > 0 ? 1 : 0;
+          if (panelMeta.amps >= 200 && panelMeta.hasMain) {
+            panelType = "main";
+          } else if (panelMeta.amps >= 200) {
+            panelType = "distribution";
+          }
+        }
       }
-      panelsByVoltage[voltage].push(p);
+
+      const equipmentNode = {
+        type: panelType,
+        level: level,
+        voltage: panelMeta.voltage,
+        voltageNormalized: panelMeta.voltageNormalized,
+        amps: panelMeta.amps,
+        data: panel,
+        parentId: parentId,
+        children: [],
+      };
+
+      hierarchy.push(equipmentNode);
+
+      // Add this panel as a child of its parent
+      if (parentId) {
+        const parent = hierarchy.find((item) => item.data.id === parentId);
+        if (parent) {
+          parent.children.push(panel.id);
+        }
+      }
     });
 
-    // STEP 3: Sort voltage groups (highest to lowest)
-    const voltageKeys = Object.keys(panelsByVoltage)
-      .map((v) => parseInt(v))
-      .sort((a, b) => b - a);
+    return hierarchy;
+  };
 
-    // STEP 4: Process each voltage level (each voltage = new hierarchy level)
-    let currentLevel = transformers.length > 0 ? 1 : 0;
-
-    voltageKeys.forEach((voltage, voltageIndex) => {
-      const panelsAtVoltage = panelsByVoltage[voltage];
-
-      // Sort panels within this voltage level:
-      // 1. By amp rating (highest first)
-      // 2. If amps equal, prioritize panel with main breaker
-      // 3. If still equal, sort alphabetically by designation
-      panelsAtVoltage.sort((a, b) => {
-        const ampsA = parseAmps(a.data?.electrical?.busRating);
-        const ampsB = parseAmps(b.data?.electrical?.busRating);
-
-        if (ampsA !== ampsB) {
-          return ampsB - ampsA; // Highest amps first
-        }
-
-        // If amps equal, prioritize main breaker
-        const hasMainA = hasMainBreaker(a);
-        const hasMainB = hasMainBreaker(b);
-        if (hasMainA !== hasMainB) {
-          return hasMainB ? 1 : -1;
-        }
-
-        // If still equal, sort alphabetically by designation
-        const desigA = (a.data?.panelDesignation || "").toLowerCase();
-        const desigB = (b.data?.panelDesignation || "").toLowerCase();
-        return desigA.localeCompare(desigB);
-      });
-
-      // Assign type based on electrical hierarchy rules
-      panelsAtVoltage.forEach((panel, panelIndex) => {
-        const amps = parseAmps(panel.data?.electrical?.busRating);
-        const hasMain = hasMainBreaker(panel);
-        const isFirstAtVoltage = panelIndex === 0;
-        const isHighestVoltage = voltageIndex === 0;
-
-        let type;
-
-        // RULE: Main panel = highest voltage + highest amps + main breaker
-        if (isHighestVoltage && isFirstAtVoltage && hasMain) {
-          type = "main";
-        }
-        // RULE: Distribution = 200A+ with main breaker OR 400A+ regardless
-        else if ((amps >= 200 && hasMain) || amps >= 400) {
-          type = "distribution";
-        }
-        // RULE: Branch = everything else
-        else {
-          type = "branch";
-        }
-
-        sorted.push({
-          type: type,
-          level: currentLevel,
-          voltage: voltage,
-          amps: amps,
-          data: panel,
-        });
-      });
-
-      currentLevel++; // Each voltage level gets its own hierarchy level
-    });
-
-    return sorted;
+  // Wrapper to maintain backwards compatibility with existing code
+  const sortElectricalHierarchy = (panels, transformers) => {
+    return buildElectricalHierarchy(panels, transformers);
   };
 
   // Generate electrical systems report with hierarchy sorting
@@ -535,12 +559,12 @@ const ReportGenerator = ({
     return "No electrical equipment has been surveyed.";
   }
 
-  const sortedEquipment = sortElectricalHierarchy(panels, transformers);
+  const hierarchy = buildElectricalHierarchy(panels, transformers);
 
   let narrative = "Electrical Systems:\n\n";
 
   // Find the main panel (first panel in hierarchy with type='main')
-  const mainEquipment = sortedEquipment.find(e => e.type === 'main');
+  const mainEquipment = hierarchy.find(e => e.type === 'main');
 
   if (mainEquipment) {
     const mainData = extractPanelData(mainEquipment.data);
@@ -548,18 +572,27 @@ const ReportGenerator = ({
   }
 
   // Generate descriptions for all equipment in hierarchy order
-  sortedEquipment.forEach((equipment, index) => {
+  hierarchy.forEach((equipment, index) => {
     const data = equipment.data;
 
     if (equipment.type === 'transformer') {
       const transformerData = extractTransformerData(data);
-      narrative += `Power is supplied by a ${transformerData.powerRating} ${transformerData.primaryVoltage}/${transformerData.secondaryVoltage} transformer (${transformerData.transformerDesignation}) manufactured by ${transformerData.manufacturer} located in ${transformerData.transformerLocation}. The transformer is in ${transformerData.condition.toLowerCase()} condition.`;
 
-      // Check if next item is a panel - add connection language
-      const nextItem = sortedEquipment[index + 1];
-      if (nextItem && nextItem.type !== 'transformer') {
-        const nextPanel = extractPanelData(nextItem.data);
-        narrative += ` The secondary feeds Panelboard "${nextPanel.panelDesignation}".`;
+      // Handle missing voltage data gracefully
+      const primaryVoltage = transformerData.primaryVoltage && transformerData.primaryVoltage !== "Not Available" && transformerData.primaryVoltage !== "Unknown"
+        ? transformerData.primaryVoltage
+        : "[Primary Voltage]";
+      const secondaryVoltage = transformerData.secondaryVoltage && transformerData.secondaryVoltage !== "Not Available" && transformerData.secondaryVoltage !== "Unknown"
+        ? transformerData.secondaryVoltage
+        : "[Secondary Voltage]";
+
+      narrative += `Power is supplied by a ${transformerData.powerRating} ${primaryVoltage}/${secondaryVoltage} transformer (${transformerData.transformerDesignation}) manufactured by ${transformerData.manufacturer} located in ${transformerData.transformerLocation}. The transformer is in ${transformerData.condition.toLowerCase()} condition.`;
+
+      // Find child panels (fed by this transformer)
+      const childPanels = hierarchy.filter(item => item.parentId === data.id);
+      if (childPanels.length > 0) {
+        const childPanel = extractPanelData(childPanels[0].data);
+        narrative += ` The secondary feeds Panelboard "${childPanel.panelDesignation}".`;
       }
 
       narrative += `\n\n`;
@@ -568,23 +601,19 @@ const ReportGenerator = ({
     if (equipment.type === 'main' || equipment.type === 'distribution' || equipment.type === 'branch') {
       const panelData = extractPanelData(data);
 
-      narrative += `Panelboard "${panelData.panelDesignation}" is a ${panelData.busRating} ${panelData.voltage} ${panelData.phase} ${panelData.wireConfig || ''} panel`;
+      narrative += `Panelboard "${panelData.panelDesignation}" is a ${panelData.busRating} ${panelData.voltage} ${panelData.phase} ${panelData.wireConfig || '4-wire'} panel`;
 
-      if (panelData.mainBreakerSize !== "MLO" && panelData.mainBreakerSize !== "Unknown") {
+      if (panelData.mainBreakerSize && panelData.mainBreakerSize !== "MLO" && panelData.mainBreakerSize !== "Unknown" && panelData.mainBreakerSize !== "Not Available") {
         narrative += ` with a ${panelData.mainBreakerSize} main breaker`;
       } else if (panelData.mainBreakerSize === "MLO") {
         narrative += ` with main lug only (MLO)`;
       }
 
-      // Look ahead: does this panel feed the next one?
-      const nextItem = sortedEquipment[index + 1];
-      if (nextItem && nextItem.type !== 'transformer') {
-        // Panel feeds next if: different voltage OR same voltage but lower amps
-        if (nextItem.voltage < equipment.voltage ||
-            (nextItem.voltage === equipment.voltage && nextItem.amps < equipment.amps)) {
-          const nextPanel = extractPanelData(nextItem.data);
-          narrative += ` and has a subfeed breaker serving Panelboard "${nextPanel.panelDesignation}"`;
-        }
+      // Find child panels (fed by this panel)
+      const childPanels = hierarchy.filter(item => item.parentId === data.id);
+      if (childPanels.length > 0) {
+        const childDesignations = childPanels.map(child => `"${extractPanelData(child.data).panelDesignation}"`).join(", ");
+        narrative += ` and has ${childPanels.length === 1 ? 'a subfeed breaker' : 'subfeed breakers'} serving Panelboard${childPanels.length > 1 ? 's' : ''} ${childDesignations}`;
       }
 
       narrative += `.`;
