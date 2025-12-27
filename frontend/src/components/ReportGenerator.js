@@ -1500,13 +1500,15 @@ const ReportGenerator = ({
       {/* RTU Summary Table */}
       <div style={{ marginTop: "30px" }}>
         <h4 style={{ marginBottom: "15px" }}>Equipment Summary:</h4>
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: "13px",
-          }}
-        >
+        <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontSize: "13px",
+              minWidth: "800px",
+            }}
+          >
           <thead>
             <tr style={{ backgroundColor: "#f0f0f0" }}>
               <th
@@ -1786,11 +1788,13 @@ const ReportGenerator = ({
             </tr>
           </tbody>
         </table>
+        </div>
       </div>
 
-      {/* Electrical Systems Section - Only show if there are panels */}
-      {panels.length > 0 && (
-        <div style={{ marginBottom: "30px", marginTop: "40px" }}>
+      {/* Electrical Systems Section */}
+      <div style={{ marginBottom: "30px", marginTop: "40px" }}>
+        {panels.length > 0 ? (
+        <div>
           <div
             style={{
               display: "flex",
@@ -2645,7 +2649,32 @@ const ReportGenerator = ({
             </div>
           )}
         </div>
-      )}
+        ) : (
+          <div>
+            <h3
+              style={{
+                fontSize: "16px",
+                fontWeight: "bold",
+                marginBottom: "15px",
+                textDecoration: "underline",
+              }}
+            >
+              Electrical Systems:
+            </h3>
+            <p
+              style={{
+                textAlign: "justify",
+                lineHeight: "1.6",
+                fontSize: "14px",
+                fontStyle: "italic",
+                color: "#999",
+              }}
+            >
+              Information not yet input
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Plumbing Systems Section */}
       <div style={{ marginBottom: "30px", marginTop: "40px" }}>
@@ -2664,9 +2693,11 @@ const ReportGenerator = ({
             textAlign: "justify",
             lineHeight: "1.6",
             fontSize: "14px",
+            fontStyle: project?.plumbingDescription ? "normal" : "italic",
+            color: project?.plumbingDescription ? "#000" : "#999",
           }}
         >
-          {project?.plumbingDescription || "The proposed space is served by a separately metered water line. The service is metered and runs overhead to serve the toilet rooms within the space. Each toilet room consists of a floor mounted tank type water closet and a wall mounted lavatory. There is also a tank type hot water heater. All of the fixtures are in good condition and should be considered for reuse."}
+          {project?.plumbingDescription || "Information not yet input"}
         </p>
         {project?.gasService && (
           <p
@@ -2699,9 +2730,11 @@ const ReportGenerator = ({
             textAlign: "justify",
             lineHeight: "1.6",
             fontSize: "14px",
+            fontStyle: project?.fireProtectionDescription ? "normal" : "italic",
+            color: project?.fireProtectionDescription ? "#000" : "#999",
           }}
         >
-          {project?.fireProtectionDescription || "The proposed space is fully sprinkled. The fire sprinkler system enters the space from the main distribution lines. The space is served by the building fire alarm system."}
+          {project?.fireProtectionDescription || "Information not yet input"}
         </p>
       </div>
 

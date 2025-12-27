@@ -18,6 +18,7 @@ const Camera = () => {
   const [capturedImages, setCapturedImages] = useState([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
+  const [tokenUsage, setTokenUsage] = useState(null);
   const [error, setError] = useState(null);
   const [captureMethod, setCaptureMethod] = useState("upload");
   const [cameraStarted, setCameraStarted] = useState(false);
@@ -344,6 +345,7 @@ const Camera = () => {
 
       if (responseData.success) {
         console.log('[Camera] Extracted data:', responseData.data);
+        console.log('[Camera] Token usage:', responseData.usage);
 
         // Check if data is empty or all fields are "Not Available"
         const hasData = responseData.data && Object.keys(responseData.data).length > 0;
@@ -353,6 +355,7 @@ const Camera = () => {
         }
 
         setExtractedData(responseData.data);
+        setTokenUsage(responseData.usage);
         setShowUploadZone(false); // Hide upload zone after successful analysis
       } else {
         const errorMsg = responseData.error || "Analysis failed";
@@ -372,6 +375,7 @@ const Camera = () => {
       // Reset for next RTU
       setCapturedImages([]);
       setExtractedData(null);
+      setTokenUsage(null);
       setError(null);
       setShowUploadZone(true);
       // Reload project to get updated RTU count
@@ -1341,6 +1345,53 @@ const Camera = () => {
                         >
                           <strong>AI Confidence:</strong>{" "}
                           {extractedData.overallConfidence}
+                        </div>
+                      )}
+
+                      {/* Token Usage Display */}
+                      {tokenUsage && (
+                        <div
+                          style={{
+                            marginTop: "20px",
+                            padding: "15px",
+                            borderRadius: "8px",
+                            backgroundColor: "#e7f3ff",
+                            borderLeft: "4px solid #2196F3",
+                          }}
+                        >
+                          <h5 style={{ margin: "0 0 10px 0", color: "#1976D2" }}>
+                            📊 AI Token Usage:
+                          </h5>
+                          <div style={{ fontSize: "14px", color: "#333" }}>
+                            <p style={{ margin: "5px 0" }}>
+                              <strong>Input Tokens:</strong>{" "}
+                              {tokenUsage.inputTokens?.toLocaleString() || 0}
+                              {tokenUsage.inputCost && (
+                                <span style={{ color: "#666", marginLeft: "10px" }}>
+                                  (${tokenUsage.inputCost.toFixed(4)})
+                                </span>
+                              )}
+                            </p>
+                            <p style={{ margin: "5px 0" }}>
+                              <strong>Output Tokens:</strong>{" "}
+                              {tokenUsage.outputTokens?.toLocaleString() || 0}
+                              {tokenUsage.outputCost && (
+                                <span style={{ color: "#666", marginLeft: "10px" }}>
+                                  (${tokenUsage.outputCost.toFixed(4)})
+                                </span>
+                              )}
+                            </p>
+                            <p style={{ margin: "5px 0", fontWeight: "bold" }}>
+                              <strong>Total Cost:</strong>{" "}
+                              {tokenUsage.totalCost ? (
+                                <span style={{ color: "#2196F3" }}>
+                                  ${tokenUsage.totalCost.toFixed(4)}
+                                </span>
+                              ) : (
+                                "N/A"
+                              )}
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>

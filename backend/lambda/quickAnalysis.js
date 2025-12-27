@@ -1176,6 +1176,9 @@ Extract all visible information from the transformer nameplate. Be realistic abo
           inputTokens,
           outputTokens,
           totalTokens,
+          inputCost,
+          outputCost,
+          totalCost,
           estimatedCost: totalCost,
           model: "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
         },
