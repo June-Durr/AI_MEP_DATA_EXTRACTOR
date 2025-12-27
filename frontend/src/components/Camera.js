@@ -2,6 +2,7 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ReportGenerator from "./ReportGenerator";
+import ImageDropZone from "./ImageDropZone";
 
 const Camera = () => {
   const { projectId } = useParams();
@@ -14,13 +15,14 @@ const Camera = () => {
   const fileInputRef = useRef(null);
 
   const [stream, setStream] = useState(null);
-  const [capturedImage, setCapturedImage] = useState(null);
+  const [capturedImages, setCapturedImages] = useState([]);
   const [analyzing, setAnalyzing] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
   const [error, setError] = useState(null);
-  const [captureMethod, setCaptureMethod] = useState("camera");
+  const [captureMethod, setCaptureMethod] = useState("upload");
   const [cameraStarted, setCameraStarted] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [showUploadZone, setShowUploadZone] = useState(true);
 
   // User input state - DEFAULT TO ELECTRIC
   const [userInputs, setUserInputs] = useState({
@@ -233,18 +235,32 @@ const Camera = () => {
         return;
       }
 
-      canvas.width = videoWidth;
-      canvas.height = videoHeight;
-      context.drawImage(video, 0, 0, videoWidth, videoHeight);
+      // Limit dimensions to 1024px on longest side to reduce payload size
+      const maxDimension = 1024;
+      let width = videoWidth;
+      let height = videoHeight;
 
-      const imageData = canvas.toDataURL("image/jpeg", 0.95);
+      if (width > height && width > maxDimension) {
+        height = (height / width) * maxDimension;
+        width = maxDimension;
+      } else if (height > maxDimension) {
+        width = (width / height) * maxDimension;
+        height = maxDimension;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      context.drawImage(video, 0, 0, width, height);
+
+      // Reduce quality to 70% to minimize payload size
+      const imageData = canvas.toDataURL("image/jpeg", 0.7);
 
       if (imageData.length < 1000) {
         setError("Failed to capture image");
         return;
       }
 
-      setCapturedImage(imageData);
+      setCapturedImages(prev => [...prev, imageData]);
       stopCamera();
     } catch (error) {
       setError(`Capture failed: ${error.message}`);
@@ -264,12 +280,30 @@ const Camera = () => {
   };
 
   const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
+    const files = Array.from(event.target.files);
+    files.forEach(file => {
       const reader = new FileReader();
-      reader.onload = (e) => setCapturedImage(e.target.result);
+      reader.onload = (e) => setCapturedImages(prev => [...prev, e.target.result]);
       reader.readAsDataURL(file);
-    }
+    });
+  };
+
+  const handleImagesAdded = (newImages) => {
+    setCapturedImages(prev => [...prev, ...newImages]);
+  };
+
+  const removeImage = (indexToRemove) => {
+    setCapturedImages(prev => prev.filter((_, index) => index !== indexToRemove));
+  };
+
+  const moveImageToFirst = (indexToMove) => {
+    if (indexToMove === 0) return; // Already first
+    setCapturedImages(prev => {
+      const newImages = [...prev];
+      const [movedImage] = newImages.splice(indexToMove, 1);
+      newImages.unshift(movedImage);
+      return newImages;
+    });
   };
 
   const uploadAndAnalyze = async () => {
@@ -280,13 +314,22 @@ const Camera = () => {
       const apiUrl =
         process.env.REACT_APP_API_URL ||
         "https://jqyt5l9x73.execute-api.us-east-1.amazonaws.com/prod";
-      const base64Data = capturedImage.split(",")[1];
 
+      console.log('[Camera] Sending to API:', {
+        equipmentType: 'hvac',
+        imageCount: capturedImages.length
+      });
+
+      // Extract base64 data from all images (remove data:image/jpeg;base64, prefix)
+      const allBase64Images = capturedImages.map(img => img.split(",")[1]);
+
+      // Send ALL images to Lambda for comprehensive analysis
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageBase64: base64Data,
+          images: allBase64Images,  // Send all images
+          imageBase64: allBase64Images[0],  // Keep for backward compatibility
           equipmentType: "hvac",
         }),
       });
@@ -297,13 +340,28 @@ const Camera = () => {
 
       const responseData = await response.json();
 
+      console.log('[Camera] AI Response:', responseData);
+
       if (responseData.success) {
+        console.log('[Camera] Extracted data:', responseData.data);
+
+        // Check if data is empty or all fields are "Not Available"
+        const hasData = responseData.data && Object.keys(responseData.data).length > 0;
+
+        if (!hasData) {
+          throw new Error("AI returned no data. The image may be unclear or not showing an RTU nameplate. Try using a clearer photo or different angle.");
+        }
+
         setExtractedData(responseData.data);
+        setShowUploadZone(false); // Hide upload zone after successful analysis
       } else {
-        throw new Error(responseData.error || "Analysis failed");
+        const errorMsg = responseData.error || "Analysis failed";
+        console.error('[Camera] Analysis error:', errorMsg);
+        throw new Error(errorMsg);
       }
     } catch (error) {
-      setError(`Analysis failed: ${error.message}`);
+      console.error('[Camera] Error:', error);
+      setError(`Analysis failed: ${error.message}. Please check the console (F12) for more details.`);
     } finally {
       setAnalyzing(false);
     }
@@ -312,9 +370,10 @@ const Camera = () => {
   const saveAndContinue = () => {
     if (saveRTUToProject(extractedData)) {
       // Reset for next RTU
-      setCapturedImage(null);
+      setCapturedImages([]);
       setExtractedData(null);
       setError(null);
+      setShowUploadZone(true);
       // Reload project to get updated RTU count
       loadProject();
       // Reset user inputs to defaults
@@ -412,32 +471,17 @@ const Camera = () => {
             </div>
           )}
 
-          {!capturedImage ? (
+          {!extractedData && showUploadZone ? (
             <div>
               <div className="card" style={{ marginBottom: "20px" }}>
                 <h3 style={{ margin: "0 0 15px 0" }}>
-                  Capture RTU #{currentRTUNumber}:
+                  Upload RTU #{currentRTUNumber} Photos:
                 </h3>
-                <div style={{ display: "flex", gap: "15px" }}>
+
+                {/* Tab buttons for Camera vs Upload */}
+                <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
                   <button
-                    onClick={() => setCaptureMethod("camera")}
-                    className="btn"
-                    style={{
-                      flex: 1,
-                      padding: "15px",
-                      backgroundColor:
-                        captureMethod === "camera" ? "#007bff" : "white",
-                      color: captureMethod === "camera" ? "white" : "#333",
-                      border: "2px solid #007bff",
-                    }}
-                  >
-                    📱 Use Camera
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCaptureMethod("upload");
-                      fileInputRef.current?.click();
-                    }}
+                    onClick={() => setCaptureMethod("upload")}
                     className="btn"
                     style={{
                       flex: 1,
@@ -448,9 +492,67 @@ const Camera = () => {
                       border: "2px solid #28a745",
                     }}
                   >
-                    💻 Upload File
+                    📁 Drag & Drop / Browse
+                  </button>
+                  <button
+                    onClick={() => setCaptureMethod("camera")}
+                    className="btn"
+                    style={{
+                      flex: 1,
+                      padding: "15px",
+                      backgroundColor:
+                        captureMethod === "camera" ? "#17a2b8" : "white",
+                      color: captureMethod === "camera" ? "white" : "#333",
+                      border: "2px solid #17a2b8",
+                    }}
+                  >
+                    📱 Use Camera
                   </button>
                 </div>
+
+                {/* Drag and Drop Zone */}
+                {captureMethod === "upload" && (
+                  <div>
+                    {/* Instructions for multi-image upload */}
+                    <div style={{
+                      padding: "15px",
+                      backgroundColor: "#e7f3ff",
+                      borderLeft: "4px solid #2196F3",
+                      marginBottom: "15px",
+                      borderRadius: "4px"
+                    }}>
+                      <strong style={{ color: "#1976D2", display: "block", marginBottom: "8px" }}>
+                        📸 Upload 2 Photos for Complete RTU Analysis:
+                      </strong>
+                      <ol style={{ margin: "0", paddingLeft: "20px", color: "#555" }}>
+                        <li><strong>RTU Nameplate</strong> - Main equipment label with manufacturer, model, serial number, electrical specs</li>
+                        <li><strong>Fuse Label</strong> (inside disconnect box) - Shows fuse size (e.g., "60A FUSE")</li>
+                      </ol>
+                      <p style={{ margin: "10px 0 0 0", fontSize: "14px", color: "#666" }}>
+                        💡 <em>The AI will automatically extract fuse size from the fuse label and all other data from the nameplate.</em>
+                      </p>
+                    </div>
+
+                    <ImageDropZone
+                      onImagesAdded={handleImagesAdded}
+                      existingImages={capturedImages}
+                      onImageDelete={removeImage}
+                    />
+                    {capturedImages.length > 0 && (
+                      <button
+                        onClick={() => setShowUploadZone(false)}
+                        className="btn btn-success"
+                        style={{
+                          width: "100%",
+                          padding: "15px",
+                          marginTop: "15px",
+                        }}
+                      >
+                        ✓ Done - Continue with {capturedImages.length} Photo{capturedImages.length !== 1 ? 's' : ''}
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {captureMethod === "camera" && !cameraStarted && (
                   <button
@@ -580,45 +682,143 @@ const Camera = () => {
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                multiple
                 onChange={handleFileUpload}
                 style={{ display: "none" }}
               />
               <canvas ref={canvasRef} style={{ display: "none" }} />
             </div>
-          ) : (
+          ) : capturedImages.length > 0 && !extractedData && !showUploadZone ? (
             <div>
-              <div
-                className="card"
-                style={{ padding: 0, marginBottom: "20px" }}
-              >
-                <img
-                  src={capturedImage}
-                  alt="RTU nameplate"
+              {/* Image Gallery */}
+              <div className="card" style={{ marginBottom: "20px" }}>
+                <h3 style={{ margin: "0 0 15px 0" }}>
+                  {capturedImages.length} Photo{capturedImages.length !== 1 ? 's' : ''} Ready for Analysis
+                </h3>
+
+                <div style={{ marginBottom: "15px", padding: "10px", backgroundColor: "#e7f3ff", borderRadius: "8px" }}>
+                  <p style={{ margin: "0", fontSize: "14px", color: "#0066cc" }}>
+                    💡 <strong>Tip:</strong> Click on any photo to make it PRIMARY (used for AI analysis). This is useful if your nameplate photo doesn't show all details.
+                  </p>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "15px", marginBottom: "20px" }}>
+                  {capturedImages.map((image, index) => (
+                    <div
+                      key={index}
+                      onClick={() => moveImageToFirst(index)}
+                      style={{
+                        position: "relative",
+                        paddingBottom: "100%",
+                        backgroundColor: "#f0f0f0",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        border: index === 0 ? "3px solid #28a745" : "2px solid #ddd",
+                        cursor: index === 0 ? "default" : "pointer",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (index !== 0) {
+                          e.currentTarget.style.border = "3px solid #007bff";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (index !== 0) {
+                          e.currentTarget.style.border = "2px solid #ddd";
+                        }
+                      }}
+                    >
+                      <img
+                        src={image}
+                        alt={`RTU ${index + 1}`}
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "5px",
+                          left: "5px",
+                          backgroundColor: index === 0 ? "#28a745" : "rgba(0,0,0,0.7)",
+                          color: "white",
+                          borderRadius: "4px",
+                          padding: "4px 8px",
+                          fontSize: "12px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {index === 0 ? "PRIMARY ✓" : `#${index + 1} - Click to Analyze`}
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeImage(index);
+                        }}
+                        style={{
+                          position: "absolute",
+                          top: "5px",
+                          right: "5px",
+                          backgroundColor: "#dc3545",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "28px",
+                          height: "28px",
+                          cursor: "pointer",
+                          fontSize: "16px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          zIndex: 10,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add More Photos Button */}
+                <button
+                  onClick={() => {
+                    setShowUploadZone(true);
+                    setCaptureMethod("upload");
+                  }}
+                  className="btn"
                   style={{
                     width: "100%",
-                    maxHeight: "60vh",
-                    objectFit: "contain",
+                    padding: "15px",
+                    backgroundColor: "#17a2b8",
+                    color: "white",
+                    fontSize: "16px",
                   }}
-                />
+                >
+                  📁 Add More Photos (Drag & Drop)
+                </button>
               </div>
 
               {/* User Input Form - BEFORE analysis */}
-              {!extractedData && (
-                <div className="card" style={{ marginBottom: "20px" }}>
-                  <h3 style={{ margin: "0 0 15px 0" }}>
-                    Equipment Information:
-                  </h3>
+              <div className="card" style={{ marginBottom: "20px" }}>
+                <h3 style={{ margin: "0 0 15px 0" }}>
+                  Equipment Information:
+                </h3>
 
-                  <div style={{ marginBottom: "15px" }}>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "5px",
-                        fontWeight: "500",
-                      }}
-                    >
-                      Condition:
-                    </label>
+                <div style={{ marginBottom: "15px" }}>
+                  <label
+                    style={{
+                      display: "block",
+                      marginBottom: "5px",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Condition:
+                  </label>
                     <select
                       value={userInputs.condition}
                       onChange={(e) =>
@@ -709,48 +909,58 @@ const Camera = () => {
                     </div>
                   )}
 
-                  <div
-                    style={{ display: "flex", gap: "15px", marginTop: "20px" }}
+                <p style={{ fontSize: "14px", color: "#666", marginTop: "10px" }}>
+                  <strong>Note:</strong> {capturedImages.length > 1
+                    ? `All ${capturedImages.length} photos will be included. The PRIMARY photo will be used for AI analysis.`
+                    : "The photo will be used for AI analysis."}
+                </p>
+
+                <div
+                  style={{ display: "flex", gap: "15px", marginTop: "20px" }}
+                >
+                  <button
+                    onClick={() => {
+                      setCapturedImages([]);
+                      setError(null);
+                      setShowUploadZone(true);
+                    }}
+                    className="btn"
+                    style={{
+                      backgroundColor: "#6c757d",
+                      color: "white",
+                      padding: "12px 24px",
+                    }}
                   >
-                    <button
-                      onClick={() => {
-                        setCapturedImage(null);
-                        setError(null);
-                      }}
-                      className="btn"
-                      style={{
-                        backgroundColor: "#6c757d",
-                        color: "white",
-                        padding: "12px 24px",
-                      }}
-                    >
-                      🔄 Retake
-                    </button>
-                    <button
-                      onClick={uploadAndAnalyze}
-                      disabled={
+                    🔄 Clear All Photos
+                  </button>
+                  <button
+                    onClick={uploadAndAnalyze}
+                    disabled={
+                      analyzing ||
+                      capturedImages.length === 0 ||
+                      (userInputs.heatType === "Gas" &&
+                        !userInputs.gasPipeSize)
+                    }
+                    className="btn btn-success"
+                    style={{
+                      flex: 1,
+                      padding: "12px 24px",
+                      opacity:
                         analyzing ||
+                        capturedImages.length === 0 ||
                         (userInputs.heatType === "Gas" &&
                           !userInputs.gasPipeSize)
-                      }
-                      className="btn btn-success"
-                      style={{
-                        flex: 1,
-                        padding: "12px 24px",
-                        opacity:
-                          analyzing ||
-                          (userInputs.heatType === "Gas" &&
-                            !userInputs.gasPipeSize)
-                            ? 0.6
-                            : 1,
-                      }}
-                    >
-                      {analyzing ? "Analyzing..." : "🤖 Analyze Nameplate"}
-                    </button>
-                  </div>
+                          ? 0.6
+                          : 1,
+                    }}
+                  >
+                    {analyzing ? "Analyzing..." : "🤖 Analyze Nameplate"}
+                  </button>
                 </div>
-              )}
-
+              </div>
+            </div>
+          ) : (
+            <div>
               {extractedData && (
                 <div>
                   <div
@@ -856,6 +1066,14 @@ const Camera = () => {
                             "Not Available"}
                         </p>
                         <p>
+                          <strong>Volts:</strong>{" "}
+                          {extractedData.compressor1?.volts || "Not Available"}
+                        </p>
+                        <p>
+                          <strong>Phase:</strong>{" "}
+                          {extractedData.compressor1?.phase || "Not Available"}
+                        </p>
+                        <p>
                           <strong>RLA:</strong>{" "}
                           {extractedData.compressor1?.rla || "Not Available"}
                         </p>
@@ -881,6 +1099,14 @@ const Camera = () => {
                               "Not Available"}
                           </p>
                           <p>
+                            <strong>Volts:</strong>{" "}
+                            {extractedData.compressor2?.volts || "Not Available"}
+                          </p>
+                          <p>
+                            <strong>Phase:</strong>{" "}
+                            {extractedData.compressor2?.phase || "Not Available"}
+                          </p>
+                          <p>
                             <strong>RLA:</strong>{" "}
                             {extractedData.compressor2?.rla || "Not Available"}
                           </p>
@@ -895,10 +1121,10 @@ const Camera = () => {
                         </div>
                       )}
 
-                      {/* Condenser Fan Motor */}
+                      {/* Outdoor Fan Motor */}
                       <div style={{ marginBottom: "20px" }}>
                         <h5 style={{ color: "#666", margin: "10px 0" }}>
-                          Condenser Fan Motor:
+                          Outdoor Fan Motor:
                         </h5>
                         <p>
                           <strong>Quantity:</strong>{" "}
@@ -906,13 +1132,23 @@ const Camera = () => {
                             "Not Available"}
                         </p>
                         <p>
-                          <strong>HP:</strong>{" "}
-                          {extractedData.condenserFanMotor?.hp ||
+                          <strong>Volts:</strong>{" "}
+                          {extractedData.condenserFanMotor?.volts ||
+                            "Not Available"}
+                        </p>
+                        <p>
+                          <strong>Phase:</strong>{" "}
+                          {extractedData.condenserFanMotor?.phase ||
                             "Not Available"}
                         </p>
                         <p>
                           <strong>FLA:</strong>{" "}
                           {extractedData.condenserFanMotor?.fla ||
+                            "Not Available"}
+                        </p>
+                        <p>
+                          <strong>HP:</strong>{" "}
+                          {extractedData.condenserFanMotor?.hp ||
                             "Not Available"}
                         </p>
                       </div>
@@ -928,14 +1164,56 @@ const Camera = () => {
                             "Not Available"}
                         </p>
                         <p>
-                          <strong>HP:</strong>{" "}
-                          {extractedData.indoorFanMotor?.hp || "Not Available"}
+                          <strong>Volts:</strong>{" "}
+                          {extractedData.indoorFanMotor?.volts ||
+                            "Not Available"}
+                        </p>
+                        <p>
+                          <strong>Phase:</strong>{" "}
+                          {extractedData.indoorFanMotor?.phase ||
+                            "Not Available"}
                         </p>
                         <p>
                           <strong>FLA:</strong>{" "}
                           {extractedData.indoorFanMotor?.fla || "Not Available"}
                         </p>
+                        <p>
+                          <strong>HP:</strong>{" "}
+                          {extractedData.indoorFanMotor?.hp || "Not Available"}
+                        </p>
                       </div>
+
+                      {/* Combustion Fan Motor - Only for Gas RTUs */}
+                      {extractedData.combustionFanMotor && (
+                        <div style={{ marginBottom: "20px" }}>
+                          <h5 style={{ color: "#666", margin: "10px 0" }}>
+                            Combustion Fan Motor:
+                          </h5>
+                          <p>
+                            <strong>Quantity:</strong>{" "}
+                            {extractedData.combustionFanMotor?.quantity ||
+                              "Not Available"}
+                          </p>
+                          <p>
+                            <strong>Volts:</strong>{" "}
+                            {extractedData.combustionFanMotor?.volts ||
+                              "Not Available"}
+                          </p>
+                          <p>
+                            <strong>Phase:</strong>{" "}
+                            {extractedData.combustionFanMotor?.phase ||
+                              "Not Available"}
+                          </p>
+                          <p>
+                            <strong>FLA:</strong>{" "}
+                            {extractedData.combustionFanMotor?.fla || "Not Available"}
+                          </p>
+                          <p>
+                            <strong>HP:</strong>{" "}
+                            {extractedData.combustionFanMotor?.hp || "Not Available"}
+                          </p>
+                        </div>
+                      )}
 
                       {/* Gas Information */}
                       <div style={{ marginBottom: "20px" }}>

@@ -71,7 +71,8 @@ const ElectricalSurvey = () => {
     if (projectId) {
       loadProject();
     }
-  }, [projectId, loadProject]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]); // Only depend on projectId, not loadProject
 
   const savePanelToProject = (panelData) => {
     const savedProjects = localStorage.getItem("mep-survey-projects");
@@ -279,11 +280,25 @@ const ElectricalSurvey = () => {
         return;
       }
 
-      canvas.width = videoWidth;
-      canvas.height = videoHeight;
-      context.drawImage(video, 0, 0, videoWidth, videoHeight);
+      // Limit dimensions to 1024px on longest side to reduce payload size
+      const maxDimension = 1024;
+      let width = videoWidth;
+      let height = videoHeight;
 
-      const imageData = canvas.toDataURL("image/jpeg", 0.95);
+      if (width > height && width > maxDimension) {
+        height = (height / width) * maxDimension;
+        width = maxDimension;
+      } else if (height > maxDimension) {
+        width = (width / height) * maxDimension;
+        height = maxDimension;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      context.drawImage(video, 0, 0, width, height);
+
+      // Reduce quality to 70% to minimize payload size
+      const imageData = canvas.toDataURL("image/jpeg", 0.7);
 
       if (imageData.length < 1000) {
         setError("Failed to capture image");

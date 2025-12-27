@@ -1,6 +1,116 @@
 // backend/lambda/quickAnalysis.js - COMPLETE FIXED VERSION
 const AWS = require("aws-sdk");
 const bedrock = new AWS.BedrockRuntime({ region: "us-east-1" });
+const fs = require("fs");
+const path = require("path");
+
+// Try to load sharp, but don't fail if it's not available
+let sharp = null;
+try {
+  sharp = require("sharp");
+  console.log("✓ Sharp library loaded successfully");
+} catch (error) {
+  console.warn("⚠ Sharp library not available, image enhancement will be skipped:", error.message);
+}
+
+/**
+ * Preprocesses an image to improve OCR accuracy
+ * @param {string} base64Image - Base64 encoded image
+ * @returns {Promise<string>} - Enhanced base64 image
+ */
+async function enhanceImageForOCR(base64Image) {
+  // If sharp is not available, return original image
+  if (!sharp) {
+    console.log("Sharp not available, skipping image enhancement");
+    return base64Image;
+  }
+
+  try {
+    // Convert base64 to buffer
+    const imageBuffer = Buffer.from(base64Image, 'base64');
+
+    // Apply image enhancements:
+    // 1. Resize if too small (upscale to at least 1500px width for better OCR)
+    // 2. Increase sharpness
+    // 3. Increase contrast
+    // 4. Normalize (auto-levels)
+    const enhanced = await sharp(imageBuffer)
+      .resize(2000, null, {
+        kernel: sharp.kernel.lanczos3,
+        withoutEnlargement: false, // Allow upscaling
+        fit: 'inside'
+      })
+      .sharpen({ sigma: 1.5 }) // Sharpen edges
+      .normalize() // Auto-adjust levels
+      .modulate({
+        brightness: 1.1, // Slightly increase brightness
+        contrast: 1.2    // Increase contrast
+      })
+      .jpeg({ quality: 95 }) // High quality output
+      .toBuffer();
+
+    // Convert back to base64
+    return enhanced.toString('base64');
+  } catch (error) {
+    console.error("Image enhancement failed, using original:", error.message);
+    // If enhancement fails, return original image
+    return base64Image;
+  }
+}
+
+/**
+ * Load reference images for few-shot learning
+ * These are the marked-up images that show Claude exactly where to find information
+ */
+function loadReferenceImages() {
+  const references = {
+    electricRtu: null,
+    gasRtu: null,
+    fuseDisconnect: null
+  };
+
+  try {
+    // Try two locations: Lambda deployment directory and local development directory
+    const refPaths = [
+      __dirname, // Lambda deployment (images in same dir as function)
+      path.join(__dirname, '..', 'reference-images') // Local development
+    ];
+
+    for (const refPath of refPaths) {
+      const electricPath = path.join(refPath, 'electric-rtu-reference.jpg.png');
+      const gasPath = path.join(refPath, 'gas-rtu-reference.jpg.png');
+      const fusePath = path.join(refPath, 'fuse-disconnect-reference.jpg.png');
+
+      if (fs.existsSync(electricPath) && !references.electricRtu) {
+        references.electricRtu = fs.readFileSync(electricPath).toString('base64');
+        console.log('✓ Loaded electric RTU reference image from', refPath);
+      }
+
+      if (fs.existsSync(gasPath) && !references.gasRtu) {
+        references.gasRtu = fs.readFileSync(gasPath).toString('base64');
+        console.log('✓ Loaded gas RTU reference image from', refPath);
+      }
+
+      if (fs.existsSync(fusePath) && !references.fuseDisconnect) {
+        references.fuseDisconnect = fs.readFileSync(fusePath).toString('base64');
+        console.log('✓ Loaded fuse disconnect reference image from', refPath);
+      }
+
+      // If all loaded, break early
+      if (references.electricRtu && references.gasRtu && references.fuseDisconnect) {
+        break;
+      }
+    }
+
+    if (!references.electricRtu || !references.gasRtu || !references.fuseDisconnect) {
+      console.warn('⚠ Some reference images not loaded - extraction accuracy may be reduced');
+    }
+  } catch (error) {
+    console.error('Error loading reference images:', error.message);
+  }
+
+  return references;
+}
 
 exports.handler = async (event) => {
   console.log("=== LAMBDA STARTED ===");
@@ -30,10 +140,129 @@ exports.handler = async (event) => {
     console.log(`Equipment type: ${equipmentType}`);
     console.log(`Number of images to analyze: ${imagesToAnalyze.length}`);
 
-    // COMPREHENSIVE PROMPT WITH JSON-ONLY ENFORCEMENT AND SERIAL NUMBER DECODING
-    const comprehensivePrompt = `You are an expert MEP engineer analyzing an HVAC equipment nameplate. Extract ALL visible information and return it in the exact JSON format below.
+    // Initialize variables
+    let referenceImages = { electricRtu: null, gasRtu: null, fuseDisconnect: null };
+    let enhancedImages = imagesToAnalyze;
+
+    // Skip processing if this is a test request
+    if (imagesToAnalyze[0] === "test") {
+      // Test mode - return success immediately without calling Bedrock
+      console.log('Test mode detected - returning test response');
+      return {
+        statusCode: 200,
+        headers: headers,
+        body: JSON.stringify({
+          success: true,
+          message: "Test mode - Lambda is functioning correctly",
+          test: true,
+          timestamp: new Date().toISOString(),
+        }),
+      };
+    }
+
+    // Load reference images for training (optional, non-blocking)
+    try {
+      console.log('Loading reference images...');
+      referenceImages = loadReferenceImages();
+      console.log('✓ Reference images loaded');
+    } catch (error) {
+      console.error('Failed to load reference images, continuing without them:', error.message);
+    }
+
+    // Enhance all images for better OCR
+    console.log('Enhancing images for better OCR...');
+    enhancedImages = await Promise.all(
+      imagesToAnalyze.map(img => enhanceImageForOCR(img))
+    );
+    console.log('✓ Image enhancement completed');
+
+    // COMPREHENSIVE PROMPT WITH VISUAL REFERENCE TRAINING
+    const comprehensivePrompt = `You are an expert MEP engineer analyzing an HVAC equipment nameplate. You have been trained on reference images that show EXACTLY where each field is located on RTU nameplates.
 
 CRITICAL: Your response must be ONLY valid JSON with no additional text before or after. Do not include explanations, markdown code blocks, or any other text. Start your response with { and end with }.
+
+IMPORTANT: The images you receive have been preprocessed and enhanced (sharpened, contrast-adjusted, upscaled) to improve readability.
+
+**VISUAL REFERENCE TRAINING - YOU HAVE BEEN SHOWN THESE LABELED EXAMPLES:**
+
+Before this nameplate image, you were shown marked-up reference images with colored clouds/boxes showing:
+
+**ELECTRIC RTU REFERENCE (Cloud Labels):**
+- Cloud #1 - Compressor Section (TOP ROW): Extract Compressor #1 data from top row #1 (COMP A): Voltage, Phase, RLA, LRA
+- Cloud #2 - Compressor #2 (COMP B): Extract from bottom row #2: Voltage, Phase, RLA, LRA
+- Cloud #3 - Outdoor Fan Motor (row labeled "FAN MTR OUTDOOR" or "OUTDOOR FAN"): Extract Quantity, Volts, Phase, FLA, HP (if visible)
+- Cloud #4 - Electrical Information: Extract Voltage, Phase, Fuse Size from MCA/MOCP section
+- NOTE: Electric RTU has NO gas heating, so leave all gas fields as "Not Available"
+
+**GAS RTU REFERENCE (Cloud Labels):**
+- Cloud #1 - Compressor Section: Same as electric RTU
+- Cloud #2 - Compressor #2: Same as electric RTU
+- Cloud #3 - Outdoor Fan Motor (row = "FAN MTR OUTDOOR" or "OUTDOOR"): Extract Quantity, Volts, Phase, FLA, HP (if visible) → condenserFanMotor
+- Cloud #4 - Gas Information (GAS HEATING section): Extract Gas Input Min, Gas Input Max, Output Capacity from gas heating section
+- Cloud #5 - Combustion Fan Motor (row = "COMBUST" or "COMBUSTION FAN"): Extract Quantity, Volts, Phase, FLA, HP (if visible) → combustionFanMotor (ONLY for Gas RTUs)
+- NOTE: Gas RTU has THREE fan motors: OUTDOOR (condenser), INDOOR (blower), and COMBUST (combustion)
+- Cloud #6 - Indoor Fan Motor (row = "INDOOR" or "FAN MTR INDOOR"): Extract Quantity, Volts, Phase, FLA, HP (if visible) → indoorFanMotor
+- Cloud #7 - Electrical Information: Extract Voltage, Phase, Fuse Size from MCA/MOCP section
+- NOTE: Gas RTU has gas heating information - MUST extract all gas fields AND combustion fan motor data
+
+**FUSE SIZE EXTRACTION RULE - CRITICAL:**
+- If user provides a photo of fuses in disconnect box, READ THE FUSE LABELS directly
+- Fuse format: Single fuse = just rating (e.g., "35"), Multiple fuses = rating/quantity (e.g., "35/3")
+- The fuse photo overrides any fuse size on the nameplate
+- Always use actual fuse amperage from disconnect, NOT the MOCP value on nameplate
+
+FEW-SHOT EXAMPLES based on reference images:
+
+EXAMPLE 1 - Carrier Packaged Unit:
+If you see a nameplate with:
+- Large logo "CARRIER"
+- Model: 50TCA06A2A5A0A0A0
+- Serial: 1315A12345
+- A table with rows labeled "COMP A", "FAN MTR OUTDOOR", etc.
+- Voltage line showing "208/230" and "3" for phase
+- Bottom text: "MCA: 31.0  MOCP: 40"
+
+You should extract:
+- manufacturer: "Carrier"
+- model: "50TCA06A2A5A0A0A0"
+- serialNumber: "1315A12345"
+- manufacturingYear: "2013" (13 from serial = 2013)
+- currentAge: "12" (2025 - 2013)
+- cooling.tonnage: "5 tons" (Model contains 06 = 60,000 BTU = 5 tons)
+- electrical.phase: "3"
+- compressor1.rla: Read from COMP A row, RLA column
+- compressor1.lra: Read from COMP A row, LRA column
+
+EXAMPLE 2 - Lennox with worn nameplate:
+If you see:
+- Faded "LENNOX" text
+- Model starts with "LCA" but rest is illegible: "LCA1__H___"
+- Serial clearly shows: "5608D05236"
+- Some table rows are worn/unreadable
+
+You should extract:
+- manufacturer: "Lennox"
+- model: "Not legible" (because you can't read full model)
+- serialNumber: "5608D05236"
+- manufacturingYear: "2006" (56 in Lennox format = 2006)
+- currentAge: "19"
+- For any worn table cells: "Not legible"
+
+EXAMPLE 3 - Character confusion prevention:
+Common OCR errors to AVOID:
+- "0" (zero) vs "O" (letter) vs "D":
+  * "5D10" should be "5010" if it's a serial number (zeros not letter D)
+  * "MODE1" should be "MODEL" (letter O not zero)
+- "8" vs "6" vs "B":
+  * "RLA: 1B.0" should be "RLA: 18.0" (number 8 not letter B)
+  * Look for the double loop in "8"
+- "1" vs "7" vs "I":
+  * Serial "7315" not "1315" - check for the horizontal top on "7"
+
+When you see these ambiguous characters, use context:
+- In numeric fields (RLA, LRA, voltage): use numbers not letters
+- In model numbers: could be either - verify with surrounding characters
+- In serial numbers: check manufacturer format (some use letters, some don't)
 
 CRITICAL INSTRUCTIONS:
 1. Extract EVERY field you can see on the nameplate
@@ -91,9 +320,47 @@ CRITICAL INSTRUCTIONS:
    - If you identify year as 2006, age = 19 years
    - If you identify year as 2015, age = 10 years
 
-6. For electrical specs, look for MCA, MOCP, RLA, LRA labels
-7. Return confidence level for each major section
-8. **COOLING TONNAGE - CRITICAL**: This is the COOLING CAPACITY, NOT the unit weight:
+6. **CARRIER/BRYANT NAMEPLATE TABLE STRUCTURE - CRITICAL FOR ACCURATE EXTRACTION**:
+   Most HVAC nameplates have a TABLE with rows. Read each row carefully:
+
+   **ROW 1: COMP A** (Compressor A):
+   - Columns: QTY | VOLTS AC | PH | HZ | RLA | LRA | REF SYSTEM
+   - Example: "1 | 208/230 | 3 | 60 | 16.0 | 110 | R-410A"
+   - Extract RLA (Rated Load Amps) → compressor1.rla
+   - Extract LRA (Locked Rotor Amps) → compressor1.lra
+   - Extract VOLTS → compressor1.volts
+   - Extract PH (Phase) → compressor1.phase
+
+   **ROW 2: COMP B** (Compressor B - if dual compressor):
+   - Same structure as COMP A
+   - Extract to compressor2 fields
+   - If row is empty/absent, use "Not Available" for all compressor2 fields
+
+   **ROW 3-5: FAN MOTORS - CRITICAL - EXTRACT ALL FIELDS**:
+   - "FAN MTR OUTDOOR" or "OUTDOOR" → condenserFanMotor object (present on ALL RTUs)
+   - "FAN MTR INDOOR" or "INDOOR" → indoorFanMotor object (present on ALL RTUs)
+   - "COMBUST" or "COMBUSTION FAN" → combustionFanMotor object (ONLY on GAS RTUs - leave as "Not Available" for electric RTUs)
+   - MUST extract: Quantity (QTY), Volts, Phase (PH), FLA (Full Load Amps), HP (if visible)
+   - ALL of these fields should be visible on the nameplate - extract every one
+   - NOTE: Gas RTUs have 3 fan motors (OUTDOOR, INDOOR, COMBUST). Electric RTUs have only 2 (OUTDOOR, INDOOR)
+
+   **IMPORTANT - PHASE EXTRACTION**:
+   - Unit phase comes from "POWER SUPPLY" row (typically 3-phase)
+   - Compressor phase comes from COMP A/B row (usually 3-phase)
+   - Fan motor phase comes from FAN MTR rows (often 1-phase)
+   - Do NOT mix these up - each component has its own phase
+
+7. **OCR ACCURACY - CHARACTER RECOGNITION**:
+   Common character confusions to avoid:
+   - '0' (ZERO) vs 'D': Zero is round, D has a straight left edge
+   - '0' (ZERO) vs 'O' (letter): Zero is narrower
+   - '6' vs '8': 8 has TWO loops (figure-eight), 6 has ONE loop
+   - '1' vs '4' vs '7': Verify the shape carefully
+   If ANY character is unclear, mark the ENTIRE field as "Not legible"
+
+8. For electrical specs, look for MCA, MOCP labels below the main table
+9. Return confidence level for each major section
+10. **COOLING TONNAGE - CRITICAL**: This is the COOLING CAPACITY, NOT the unit weight:
    - Look for labels: "COOLING CAPACITY", "TONS", "TON", "BTU/H", "MBH"
    - Common conversions:
      * 60,000 BTU/hr = 5 tons
@@ -165,6 +432,14 @@ RETURN THIS EXACT JSON STRUCTURE (NO OTHER TEXT):
     "hp": "string or 'Not legible' or 'Not Available'",
     "confidence": "high" or "medium" or "low"
   },
+  "combustionFanMotor": {
+    "quantity": "string or 'Not legible' or 'Not Available'",
+    "volts": "string or 'Not legible' or 'Not Available'",
+    "phase": "1" or "3" or "Not legible" or 'Not Available'",
+    "fla": "string or 'Not legible' or 'Not Available'",
+    "hp": "string or 'Not legible' or 'Not Available'",
+    "confidence": "high" or "medium" or "low"
+  },
   "gasInformation": {
     "gasType": "Natural Gas" or "Propane" or "Not legible" or "Not Available",
     "inputMinBTU": "string or 'Not legible' or 'Not Available'",
@@ -228,6 +503,52 @@ Extract all visible information now. Apply the serial number decoding rules base
     const electricalPanelPrompt = `You are an expert electrical engineer analyzing an electrical panel nameplate. Extract ONLY what is clearly visible on the nameplate - be realistic about what can be read from a photo.
 
 CRITICAL: Your response must be ONLY valid JSON with no additional text before or after. Do not include explanations, markdown code blocks, or any other text. Start your response with { and end with }.
+
+IMPORTANT: The images you receive have been preprocessed and enhanced (sharpened, contrast-adjusted, upscaled) to improve readability. Text should be clearer than typical nameplate photos.
+
+FEW-SHOT EXAMPLES - Learn from these real panel nameplate extractions:
+
+EXAMPLE 1 - Square D Panel (clear nameplate):
+If you see:
+- Large "Square D" logo
+- Model clearly visible: "NQOD442L225G"
+- Text: "120/208V 3Ø 4W"
+- "BUS: 400A"
+- "42 CIRCUITS"
+
+You should extract:
+- manufacturer: "Square D"
+- model: "NQOD442L225G"
+- voltage: "120/208V"
+- phase: "3-phase"
+- wireConfig: "4-wire"
+- busRating: "400A"
+- poleSpaces: "42"
+
+EXAMPLE 2 - Federal Pacific (HAZARD):
+If you see:
+- "FEDERAL PACIFIC" or "FPE" or "Stab-Lok" text
+- Any condition (even if looks fine)
+
+You should extract:
+- manufacturer: "Federal Pacific Electric"
+- safetyWarnings.isFPE: true
+- condition: "Hazardous"
+- warnings: ["FEDERAL PACIFIC ELECTRIC PANEL - IMMEDIATE REPLACEMENT REQUIRED", ...]
+
+EXAMPLE 3 - Worn General Electric panel:
+If you see:
+- Faded "GE" logo
+- Model partially visible: "TQ___12"
+- Voltage visible: "120/240"
+- Can count visible breaker spaces but unclear total
+
+You should extract:
+- manufacturer: "General Electric"
+- model: "Not legible" (because you can't read full model)
+- voltage: "120/240V"
+- phase: "1-phase" (from 120/240V configuration)
+- poleSpaces: "Not Available" (if you can't count accurately)
 
 CRITICAL INSTRUCTIONS:
 1. Extract ONLY information visible on the nameplate - most panels show limited information
@@ -649,15 +970,90 @@ Extract all visible information from the transformer nameplate. Be realistic abo
         text: selectedPrompt,
       });
 
-      // Add ALL images to the content array
+      // Add reference images for visual training (only for HVAC equipment)
+      if ((equipmentType === 'hvac' || !equipmentType) && referenceImages) {
+        let hasAnyReference = false;
+
+        // Add electric RTU reference
+        if (referenceImages.electricRtu) {
+          try {
+            content.push({
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/png",
+                data: referenceImages.electricRtu,
+              },
+            });
+            content.push({
+              type: "text",
+              text: "↑ REFERENCE IMAGE 1: Electric RTU nameplate with labeled extraction zones (clouds #1-#4). Study this layout."
+            });
+            hasAnyReference = true;
+          } catch (error) {
+            console.error('Error adding electric RTU reference:', error.message);
+          }
+        }
+
+        // Add gas RTU reference
+        if (referenceImages.gasRtu) {
+          try {
+            content.push({
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/png",
+                data: referenceImages.gasRtu,
+              },
+            });
+            content.push({
+              type: "text",
+              text: "↑ REFERENCE IMAGE 2: Gas RTU nameplate with labeled extraction zones (clouds #1-#6). Study this layout."
+            });
+            hasAnyReference = true;
+          } catch (error) {
+            console.error('Error adding gas RTU reference:', error.message);
+          }
+        }
+
+        // Add fuse disconnect reference
+        if (referenceImages.fuseDisconnect) {
+          try {
+            content.push({
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/png",
+                data: referenceImages.fuseDisconnect,
+              },
+            });
+            content.push({
+              type: "text",
+              text: "↑ REFERENCE IMAGE 3: Fuse disconnect box showing how to read fuse amperage ratings. If user provides disconnect photo, use THESE values for fuse size, NOT the nameplate MOCP."
+            });
+            hasAnyReference = true;
+          } catch (error) {
+            console.error('Error adding fuse disconnect reference:', error.message);
+          }
+        }
+
+        if (hasAnyReference) {
+          content.push({
+            type: "text",
+            text: "Now analyze the actual nameplate image(s) below using the same extraction pattern you learned from the reference images:"
+          });
+        }
+      }
+
+      // Add ALL enhanced images to the content array
       // This allows Claude to see all images of the same panel for better analysis
-      for (let i = 0; i < imagesToAnalyze.length; i++) {
+      for (let i = 0; i < enhancedImages.length; i++) {
         content.push({
           type: "image",
           source: {
             type: "base64",
             media_type: "image/jpeg",
-            data: imagesToAnalyze[i],
+            data: enhancedImages[i],
           },
         });
       }
@@ -666,19 +1062,24 @@ Extract all visible information from the transformer nameplate. Be realistic abo
       if (imagesToAnalyze.length > 1) {
         content.push({
           type: "text",
-          text: `You have been provided with ${imagesToAnalyze.length} images of the same equipment. Analyze ALL images to extract information. Use whichever image shows the nameplate most clearly. Combine information from all images if needed.`,
+          text: `You have been provided with ${imagesToAnalyze.length} images of the same equipment. Analyze ALL images to extract information. Use whichever image shows the nameplate most clearly. Combine information from all images if needed. If one of these images shows a disconnect box with fuses, extract the fuse size from the fuse labels (not the nameplate).`,
+        });
+      } else {
+        content.push({
+          type: "text",
+          text: "Extract all information from this image following the extraction pattern from the reference images above. If this is a disconnect box with fuses, read the fuse amperage directly from the fuse labels."
         });
       }
     }
 
     const response = await bedrock
       .invokeModel({
-        modelId: "anthropic.claude-3-haiku-20240307-v1:0",
+        modelId: "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
         contentType: "application/json",
         accept: "application/json",
         body: JSON.stringify({
           anthropic_version: "bedrock-2023-05-31",
-          max_tokens: 2000,
+          max_tokens: 4000,
           temperature: 0.1,
           messages: [
             {
@@ -692,6 +1093,28 @@ Extract all visible information from the transformer nameplate. Be realistic abo
 
     const result = JSON.parse(new TextDecoder().decode(response.body));
     console.log("✓ Bedrock responded");
+
+    // Log token usage and cost
+    const usage = result.usage || {};
+    const inputTokens = usage.input_tokens || 0;
+    const outputTokens = usage.output_tokens || 0;
+    const totalTokens = inputTokens + outputTokens;
+
+    // Claude 3.5 Sonnet pricing (as of 2024):
+    // Input: $3.00 per million tokens
+    // Output: $15.00 per million tokens
+    const inputCost = (inputTokens / 1_000_000) * 3.00;
+    const outputCost = (outputTokens / 1_000_000) * 15.00;
+    const totalCost = inputCost + outputCost;
+
+    console.log("=== TOKEN USAGE & COST ===");
+    console.log(`Input tokens: ${inputTokens.toLocaleString()}`);
+    console.log(`Output tokens: ${outputTokens.toLocaleString()}`);
+    console.log(`Total tokens: ${totalTokens.toLocaleString()}`);
+    console.log(`Estimated cost: $${totalCost.toFixed(4)} USD`);
+    console.log(`  - Input cost: $${inputCost.toFixed(4)}`);
+    console.log(`  - Output cost: $${outputCost.toFixed(4)}`);
+    console.log("========================");
 
     let parsedData;
     try {
@@ -749,6 +1172,13 @@ Extract all visible information from the transformer nameplate. Be realistic abo
         success: true,
         message: "Complete analysis finished",
         data: parsedData,
+        usage: {
+          inputTokens,
+          outputTokens,
+          totalTokens,
+          estimatedCost: totalCost,
+          model: "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+        },
         timestamp: new Date().toISOString(),
       }),
     };

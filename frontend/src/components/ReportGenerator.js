@@ -44,6 +44,10 @@ const ReportGenerator = ({
     () => project?.transformers || [],
     [project?.transformers]
   );
+  const savedElectricalEquipment = React.useMemo(
+    () => project?.electricalEquipment || [],
+    [project?.electricalEquipment]
+  );
 
   // If we have current extracted data, create a temporary RTU/Panel object and add it to the list
   // Use useMemo to prevent creating new objects on every render
@@ -293,12 +297,18 @@ const ReportGenerator = ({
         const heatType = rtuData.heatType;
         const gasPipeSize = rtuData.gasPipeSize;
 
-        // Build description with proper formatting for illegible data
-        let description = `The ${ordinal} unit is ${
-          tonnage.match(/\d/) ? "an" : "a"
-        } ${tonnage} ${
-          heatType === "Electric" ? "electric" : "gas-fired"
-        } model manufactured by ${manufacturer}`;
+        // Build description matching template style: "The first unit is a 8.5-ton model manufactured by Trane in 2002"
+        let description = `The ${ordinal} unit `;
+
+        // Format tonnage properly with hyphen (e.g., "8.5-ton" instead of "8.5 tons")
+        const tonnageMatch = tonnage.match(/(\d+\.?\d*)/);
+        if (tonnageMatch) {
+          description += `is a ${tonnageMatch[1]}-ton `;
+        } else {
+          description += `is a ${tonnage} `;
+        }
+
+        description += `${heatType === "Electric" ? "electric" : "gas-fired"} model manufactured by ${manufacturer}`;
 
         // Only add year if it's legible and not "Unknown" or "Not Available"
         if (
@@ -327,7 +337,7 @@ const ReportGenerator = ({
   // Generate replacement recommendation
   const generateReplacementText = () => {
     if (!hasOldUnits) {
-      return "With ASHRAE's estimated median service life of a packaged roof top unit being 15 years, the units are within their expected service life.";
+      return "With ASHRAE's estimated median service life of a packaged roof top unit being 15-years, the units are within their expected service life.";
     }
 
     const oldCount = rtus.filter((rtu) => {
@@ -336,11 +346,11 @@ const ReportGenerator = ({
     }).length;
 
     if (oldCount === rtuCount) {
-      return `With ASHRAE's estimated median service life of a packaged roof top unit being 15 years, ${
+      return `With ASHRAE's estimated median service life of a packaged roof top unit being 15-years, ${
         rtuCount === 1 ? "this unit" : "both units"
       } would be recommended to be replaced.`;
     } else {
-      return `With ASHRAE's estimated median service life of a packaged roof top unit being 15 years, ${
+      return `With ASHRAE's estimated median service life of a packaged roof top unit being 15-years, ${
         oldCount === 1 ? "one unit" : `${numberToWord(oldCount)} units`
       } would be recommended to be replaced.`;
     }
@@ -394,13 +404,36 @@ const ReportGenerator = ({
     squareFootage
       ? ` With the proposed space being approximately ${parseFloat(
           squareFootage
-        ).toLocaleString()}sq.ft., Schnackel Engineers estimates ${coolingEstimate}-tons of cooling will be required, however complete heat gain/loss calculations will be performed to determine the exact amount of cooling required.`
+        ).toLocaleString()}sqft., Schnackel Engineers estimates ${coolingEstimate}-tons of cooling will be required, however complete heat gain/loss calculations will be performed to determine the exact amount of cooling required.`
       : ""
-  } The majority of ductwork in the space is interior insulated rectangular sheet metal ductwork with insulated flexible diffuser connections.`;
+  }${project?.ductworkDescription ? ` ${project.ductworkDescription}` : " The majority of ductwork in the space is interior insulated rectangular sheet metal ductwork with insulated flexible diffuser connections."}`;
 
   // Build electrical hierarchy tree with automatic parent-child detection
-  const buildElectricalHierarchy = (panels, transformers) => {
+  const buildElectricalHierarchy = (panels, transformers, electricalEquipment = null) => {
     const hierarchy = [];
+
+    // Helper: Extract equipment from new electricalEquipment array (backward compatibility)
+    const extractEquipmentByType = () => {
+      if (!electricalEquipment || electricalEquipment.length === 0) {
+        // Use old format (panels, transformers)
+        return {
+          transformers: transformers || [],
+          serviceDisconnects: [],
+          meters: [],
+          panels: panels || [],
+        };
+      }
+
+      // Use new format (electricalEquipment array)
+      return {
+        transformers: electricalEquipment.filter((eq) => eq.type === "transformer"),
+        serviceDisconnects: electricalEquipment.filter((eq) => eq.type === "service_disconnect"),
+        meters: electricalEquipment.filter((eq) => eq.type === "meter"),
+        panels: electricalEquipment.filter((eq) => eq.type === "panel"),
+      };
+    };
+
+    const equipment = extractEquipmentByType();
 
     // Helper: Parse voltage to numeric for comparison
     const parseVoltage = (voltageStr) => {
@@ -431,10 +464,57 @@ const ReportGenerator = ({
       return mainBreaker && mainBreaker !== "MLO" && mainBreaker !== "Unknown" && mainBreaker !== "Not Available";
     };
 
+    // Helper: Get voltage from equipment (handles both old and new data formats)
+    const getEquipmentVoltage = (eq) => {
+      if (eq.type === "transformer") {
+        // Old format
+        if (eq.data?.electrical?.secondaryVoltage) {
+          return parseVoltage(eq.data.electrical.secondaryVoltage);
+        }
+        // New format
+        if (eq.aiExtractedData?.electrical?.secondaryVoltage) {
+          return parseVoltage(eq.aiExtractedData.electrical.secondaryVoltage);
+        }
+      }
+      // For other equipment types
+      if (eq.data?.electrical?.voltage) {
+        return parseVoltage(eq.data.electrical.voltage);
+      }
+      if (eq.aiExtractedData?.electrical?.voltage) {
+        return parseVoltage(eq.aiExtractedData.electrical.voltage);
+      }
+      return 0;
+    };
+
+    // Helper: Get amperage from equipment
+    const getEquipmentAmps = (eq) => {
+      if (eq.type === "transformer") {
+        if (eq.data?.electrical?.powerRating) {
+          return parseAmps(eq.data.electrical.powerRating);
+        }
+        if (eq.aiExtractedData?.electrical?.powerRating) {
+          return parseAmps(eq.aiExtractedData.electrical.powerRating);
+        }
+      }
+      if (eq.data?.electrical?.busRating) {
+        return parseAmps(eq.data.electrical.busRating);
+      }
+      if (eq.data?.electrical?.ampRating) {
+        return parseAmps(eq.data.electrical.ampRating);
+      }
+      if (eq.aiExtractedData?.electrical?.busRating) {
+        return parseAmps(eq.aiExtractedData.electrical.busRating);
+      }
+      if (eq.aiExtractedData?.electrical?.ampRating) {
+        return parseAmps(eq.aiExtractedData.electrical.ampRating);
+      }
+      return 0;
+    };
+
     // STEP 1: Add transformers as root nodes (Level 0)
-    const sortedTransformers = [...transformers].sort((a, b) => {
-      const voltA = parseVoltage(a.data?.electrical?.primaryVoltage);
-      const voltB = parseVoltage(b.data?.electrical?.primaryVoltage);
+    const sortedTransformers = [...equipment.transformers].sort((a, b) => {
+      const voltA = getEquipmentVoltage(a);
+      const voltB = getEquipmentVoltage(b);
       return voltB - voltA; // Highest voltage first
     });
 
@@ -442,22 +522,120 @@ const ReportGenerator = ({
       hierarchy.push({
         type: "transformer",
         level: 0,
-        voltage: parseVoltage(t.data?.electrical?.secondaryVoltage), // Use SECONDARY voltage for matching
-        amps: parseAmps(t.data?.electrical?.powerRating),
+        voltage: getEquipmentVoltage(t),
+        voltageNormalized: normalizeVoltage(getEquipmentVoltage(t).toString()),
+        amps: getEquipmentAmps(t),
         data: t,
         parentId: null,
         children: [],
       });
     });
 
-    // STEP 2: Build panel hierarchy based on voltage and amperage matching
-    const panelsWithMetadata = panels.map((p) => ({
-      panel: p,
-      voltage: parseVoltage(p.data?.electrical?.voltage),
-      voltageNormalized: normalizeVoltage(p.data?.electrical?.voltage),
-      amps: parseAmps(p.data?.electrical?.busRating),
-      hasMain: hasMainBreaker(p),
-    }));
+    // STEP 2: Add service disconnects (Level 1, fed by transformers)
+    const sortedDisconnects = [...equipment.serviceDisconnects].sort((a, b) => {
+      const voltA = getEquipmentVoltage(a);
+      const voltB = getEquipmentVoltage(b);
+      if (voltA !== voltB) return voltB - voltA;
+      return getEquipmentAmps(b) - getEquipmentAmps(a);
+    });
+
+    sortedDisconnects.forEach((sd) => {
+      const sdVoltage = getEquipmentVoltage(sd);
+      const sdVoltageNorm = normalizeVoltage(sdVoltage.toString());
+
+      // Match to transformer by secondary voltage
+      const matchingTransformer = hierarchy.find(
+        (item) =>
+          item.type === "transformer" &&
+          item.voltageNormalized === sdVoltageNorm
+      );
+
+      const parentId = matchingTransformer ? matchingTransformer.data.id : null;
+      const level = matchingTransformer ? 1 : 0;
+
+      hierarchy.push({
+        type: "service_disconnect",
+        level: level,
+        voltage: sdVoltage,
+        voltageNormalized: sdVoltageNorm,
+        amps: getEquipmentAmps(sd),
+        data: sd,
+        parentId: parentId,
+        children: [],
+      });
+
+      // Add to parent's children
+      if (matchingTransformer) {
+        matchingTransformer.children.push(sd.id);
+      }
+    });
+
+    // STEP 3: Add meters (Level 1-2, fed by disconnects or transformers)
+    const sortedMeters = [...equipment.meters].sort((a, b) => {
+      const voltA = getEquipmentVoltage(a);
+      const voltB = getEquipmentVoltage(b);
+      return voltB - voltA;
+    });
+
+    sortedMeters.forEach((meter) => {
+      const meterVoltage = getEquipmentVoltage(meter);
+      const meterVoltageNorm = normalizeVoltage(meterVoltage.toString());
+
+      // First try to match to a service disconnect
+      const matchingDisconnect = hierarchy.find(
+        (item) =>
+          item.type === "service_disconnect" &&
+          item.voltageNormalized === meterVoltageNorm
+      );
+
+      let parentId = null;
+      let level = 0;
+
+      if (matchingDisconnect) {
+        parentId = matchingDisconnect.data.id;
+        level = matchingDisconnect.level + 1;
+        matchingDisconnect.children.push(meter.id);
+      } else {
+        // Try to match to transformer
+        const matchingTransformer = hierarchy.find(
+          (item) =>
+            item.type === "transformer" &&
+            item.voltageNormalized === meterVoltageNorm
+        );
+
+        if (matchingTransformer) {
+          parentId = matchingTransformer.data.id;
+          level = 1;
+          matchingTransformer.children.push(meter.id);
+        }
+      }
+
+      hierarchy.push({
+        type: "meter",
+        level: level,
+        voltage: meterVoltage,
+        voltageNormalized: meterVoltageNorm,
+        amps: getEquipmentAmps(meter),
+        data: meter,
+        parentId: parentId,
+        children: [],
+      });
+    });
+
+    // STEP 4: Build panel hierarchy based on voltage and amperage matching
+    // Panels can be fed by: meters > disconnects > transformers > other panels
+    const panelsWithMetadata = equipment.panels.map((p) => {
+      const voltage = getEquipmentVoltage(p);
+      const amps = getEquipmentAmps(p);
+
+      return {
+        panel: p,
+        voltage: voltage,
+        voltageNormalized: normalizeVoltage(voltage.toString()),
+        amps: amps,
+        hasMain: hasMainBreaker(p),
+      };
+    });
 
     // Sort panels by voltage (high to low), then by amperage (high to low)
     panelsWithMetadata.sort((a, b) => {
@@ -467,46 +645,76 @@ const ReportGenerator = ({
       return 0;
     });
 
-    // STEP 3: Assign parents and build tree (First Pass: Structure)
+    // STEP 5: Assign parents for panels and build tree
+    // Priority order: Meters > Service Disconnects > Transformers > Other Panels > No Parent
     panelsWithMetadata.forEach((panelMeta, index) => {
       const panel = panelMeta.panel;
       let parentId = null;
       let level = 0;
 
-      // RULE 1: First check if there are existing panels at same voltage with higher amps
-      // (Panel-to-panel relationship takes priority over transformer-to-panel)
-      const potentialPanelParents = hierarchy.filter(
+      // RULE 1: Try to match to a meter at same voltage
+      const matchingMeter = hierarchy.find(
         (item) =>
-          item.type !== "transformer" &&
-          item.voltageNormalized === panelMeta.voltageNormalized &&
-          item.amps > panelMeta.amps
+          item.type === "meter" &&
+          item.voltageNormalized === panelMeta.voltageNormalized
       );
 
-      if (potentialPanelParents.length > 0) {
-        // RULE 1A: Panel feeds this panel (same voltage, higher amps)
-        const parent = potentialPanelParents.reduce((closest, current) => {
-          const closestDiff = Math.abs(closest.amps - panelMeta.amps);
-          const currentDiff = Math.abs(current.amps - panelMeta.amps);
-          return currentDiff < closestDiff ? current : closest;
-        });
-
-        parentId = parent.data.id;
-        level = parent.level + 1;  // Increment from parent level
+      if (matchingMeter) {
+        parentId = matchingMeter.data.id;
+        level = matchingMeter.level + 1;
+        matchingMeter.children.push(panel.id);
       } else {
-        // RULE 2: No panel parent found, check for transformer match
-        const matchingTransformer = hierarchy.find(
+        // RULE 2: Try to match to a service disconnect at same voltage
+        const matchingDisconnect = hierarchy.find(
           (item) =>
-            item.type === "transformer" &&
-            normalizeVoltage(item.data.data?.electrical?.secondaryVoltage) === panelMeta.voltageNormalized
+            item.type === "service_disconnect" &&
+            item.voltageNormalized === panelMeta.voltageNormalized
         );
 
-        if (matchingTransformer) {
-          // RULE 2A: Transformer feeds this panel
-          parentId = matchingTransformer.data.id;
-          level = 1;
+        if (matchingDisconnect) {
+          parentId = matchingDisconnect.data.id;
+          level = matchingDisconnect.level + 1;
+          matchingDisconnect.children.push(panel.id);
         } else {
-          // RULE 3: No parent found - treat as independent
-          level = transformers.length > 0 ? 1 : 0;
+          // RULE 3: Try to match to a transformer at same voltage
+          const matchingTransformer = hierarchy.find(
+            (item) =>
+              item.type === "transformer" &&
+              item.voltageNormalized === panelMeta.voltageNormalized
+          );
+
+          if (matchingTransformer) {
+            parentId = matchingTransformer.data.id;
+            level = matchingTransformer.level + 1;
+            matchingTransformer.children.push(panel.id);
+          } else {
+            // RULE 4: Check if there are existing panels at same voltage with higher amps
+            const potentialPanelParents = hierarchy.filter(
+              (item) =>
+                (item.type === "pending" || item.type === "panel" || item.type === "main" || item.type === "distribution" || item.type === "branch") &&
+                item.voltageNormalized === panelMeta.voltageNormalized &&
+                item.amps > panelMeta.amps
+            );
+
+            if (potentialPanelParents.length > 0) {
+              // Panel feeds this panel (same voltage, higher amps)
+              const parent = potentialPanelParents.reduce((closest, current) => {
+                const closestDiff = Math.abs(closest.amps - panelMeta.amps);
+                const currentDiff = Math.abs(current.amps - panelMeta.amps);
+                return currentDiff < closestDiff ? current : closest;
+              });
+
+              parentId = parent.data.id;
+              level = parent.level + 1;  // Increment from parent level
+              const parentNode = hierarchy.find((item) => item.data.id === parentId);
+              if (parentNode) {
+                parentNode.children.push(panel.id);
+              }
+            } else {
+              // RULE 5: No parent found - treat as independent
+              level = equipment.transformers.length > 0 ? 1 : 0;
+            }
+          }
         }
       }
 
@@ -523,19 +731,12 @@ const ReportGenerator = ({
       };
 
       hierarchy.push(equipmentNode);
-
-      // Add this panel as a child of its parent
-      if (parentId) {
-        const parent = hierarchy.find((item) => item.data.id === parentId);
-        if (parent) {
-          parent.children.push(panel.id);
-        }
-      }
     });
 
-    // STEP 4: Classify panel types (Second Pass: Classification)
+    // STEP 6: Classify panel types (Second Pass: Classification)
     hierarchy.forEach((item) => {
-      if (item.type === "transformer") return; // Skip transformers
+      // Skip non-panel equipment types
+      if (item.type === "transformer" || item.type === "service_disconnect" || item.type === "meter") return;
 
       const hasMainBreaker = item.hasMainBreaker;
       const hasChildren = item.children.length > 0;
@@ -577,27 +778,23 @@ const ReportGenerator = ({
   };
 
   // Wrapper to maintain backwards compatibility with existing code
-  const sortElectricalHierarchy = (panels, transformers) => {
-    return buildElectricalHierarchy(panels, transformers);
+  const sortElectricalHierarchy = (panels, transformers, electricalEquipment = null) => {
+    return buildElectricalHierarchy(panels, transformers, electricalEquipment);
   };
 
   // Generate electrical systems report with hierarchy sorting
   const generateElectricalReport = () => {
-  if (panels.length === 0 && transformers.length === 0) {
+  if (panels.length === 0 && transformers.length === 0 && savedElectricalEquipment.length === 0) {
     return "No electrical equipment has been surveyed.";
   }
 
-  const hierarchy = buildElectricalHierarchy(panels, transformers);
+  const hierarchy = buildElectricalHierarchy(panels, transformers, savedElectricalEquipment);
 
   let narrative = "Electrical Systems:\n\n";
 
-  // Find the main panel (first panel in hierarchy with type='main')
-  const mainEquipment = hierarchy.find(e => e.type === 'main');
-
-  if (mainEquipment) {
-    const mainData = extractPanelData(mainEquipment.data);
-    narrative += `[USER MUST EDIT: The proposed space is served by a separately metered ${mainData.busRating}, ${mainData.voltage}, ${mainData.phase}, ${mainData.wireConfig || '4-wire'} [fused switch/breaker/disconnect] located in [LOCATION]. The service runs [overhead/underground] in a [SIZE]" conduit to Panelboard "${mainData.panelDesignation}".]\n\n`;
-  }
+  // Note: Service entrance details require field inspection and are typically added during final review
+  // Main equipment identification is handled but service entrance details are omitted as they
+  // require field verification beyond nameplate data
 
   // Generate descriptions for all equipment in hierarchy order
   hierarchy.forEach((equipment, index) => {
@@ -609,12 +806,34 @@ const ReportGenerator = ({
       // Handle missing voltage data gracefully
       const primaryVoltage = transformerData.primaryVoltage && transformerData.primaryVoltage !== "Not Available" && transformerData.primaryVoltage !== "Unknown"
         ? transformerData.primaryVoltage
-        : "[Primary Voltage]";
+        : null;
       const secondaryVoltage = transformerData.secondaryVoltage && transformerData.secondaryVoltage !== "Not Available" && transformerData.secondaryVoltage !== "Unknown"
         ? transformerData.secondaryVoltage
-        : "[Secondary Voltage]";
+        : null;
 
-      narrative += `Power is supplied by a ${transformerData.powerRating} ${primaryVoltage}/${secondaryVoltage} transformer (${transformerData.transformerDesignation}) manufactured by ${transformerData.manufacturer} located in ${transformerData.transformerLocation}. The transformer is in ${transformerData.condition.toLowerCase()} condition.`;
+      const powerRating = transformerData.powerRating && transformerData.powerRating !== "Not Available" && transformerData.powerRating !== "Unknown"
+        ? transformerData.powerRating
+        : null;
+
+      // Build narrative with available data
+      let transformerNarrative = `Transformer (${transformerData.transformerDesignation}) manufactured by ${transformerData.manufacturer} is located in ${transformerData.transformerLocation}`;
+
+      if (powerRating) {
+        transformerNarrative = `Power is supplied by a ${powerRating} ` + transformerNarrative.charAt(0).toLowerCase() + transformerNarrative.slice(1);
+      } else {
+        transformerNarrative = `Power is supplied by ` + transformerNarrative.charAt(0).toLowerCase() + transformerNarrative.slice(1);
+      }
+
+      if (primaryVoltage && secondaryVoltage) {
+        const voltageIndex = transformerNarrative.indexOf(') manufactured');
+        if (voltageIndex > 0) {
+          transformerNarrative = transformerNarrative.slice(0, voltageIndex + 1) + `, ${primaryVoltage}/${secondaryVoltage},` + transformerNarrative.slice(voltageIndex + 1);
+        }
+      }
+
+      transformerNarrative += `. The transformer is in ${transformerData.condition.toLowerCase()} condition.`;
+
+      narrative += transformerNarrative;
 
       // Find child panels (fed by this transformer)
       const childPanels = hierarchy.filter(item => item.parentId === data.id);
@@ -673,7 +892,7 @@ const ReportGenerator = ({
     narrative += "Some electrical equipment shows signs of wear and may require replacement or upgrade.\n\n";
   }
 
-  narrative += "[USER ADDS: Telephone service information if applicable]";
+  // Note: Telephone and data service details should be added during final site review if applicable
 
   return narrative;
 };
@@ -1139,7 +1358,7 @@ const ReportGenerator = ({
       {/* Date and Project Info */}
       <div style={{ marginBottom: "30px", fontSize: "14px" }}>
         <p>
-          <strong>DATE:</strong> {new Date().toLocaleDateString()}
+          <strong>DATE:</strong> {project?.surveyDate || new Date().toISOString().split("T")[0]}
         </p>
         <p>
           <strong>Client Name:</strong> {project.clientName || "[Client Name]"}
@@ -1159,7 +1378,7 @@ const ReportGenerator = ({
         <p>Dear {project.clientName || "Client"}:</p>
         <p>
           I visited the proposed {project.name} on{" "}
-          {new Date(project.surveyDate).toLocaleDateString()}. The following is
+          {project?.surveyDate ? new Date(project.surveyDate + 'T00:00:00').toLocaleDateString() : new Date().toLocaleDateString()}. The following is
           summary of the mechanical, electrical, and plumbing systems at this
           location. The proposed space consisted of a single space which was
           vacant at the time of my visit.
@@ -1198,8 +1417,7 @@ const ReportGenerator = ({
         <p>{project.address || "[Site Address]"}</p>
         {squareFootage && (
           <p>
-            Approximate Area: {parseFloat(squareFootage).toLocaleString()}{" "}
-            sq.ft.
+            Approximate Area: {parseFloat(squareFootage).toLocaleString()}sqft.
           </p>
         )}
       </div>
@@ -2429,6 +2647,103 @@ const ReportGenerator = ({
         </div>
       )}
 
+      {/* Plumbing Systems Section */}
+      <div style={{ marginBottom: "30px", marginTop: "40px" }}>
+        <h3
+          style={{
+            fontSize: "16px",
+            fontWeight: "bold",
+            marginBottom: "15px",
+            textDecoration: "underline",
+          }}
+        >
+          Plumbing Systems:
+        </h3>
+        <p
+          style={{
+            textAlign: "justify",
+            lineHeight: "1.6",
+            fontSize: "14px",
+          }}
+        >
+          {project?.plumbingDescription || "The proposed space is served by a separately metered water line. The service is metered and runs overhead to serve the toilet rooms within the space. Each toilet room consists of a floor mounted tank type water closet and a wall mounted lavatory. There is also a tank type hot water heater. All of the fixtures are in good condition and should be considered for reuse."}
+        </p>
+        {project?.gasService && (
+          <p
+            style={{
+              textAlign: "justify",
+              lineHeight: "1.6",
+              fontSize: "14px",
+              marginTop: "15px",
+            }}
+          >
+            {project.gasService}
+          </p>
+        )}
+      </div>
+
+      {/* Fire Protection Systems Section */}
+      <div style={{ marginBottom: "30px" }}>
+        <h3
+          style={{
+            fontSize: "16px",
+            fontWeight: "bold",
+            marginBottom: "15px",
+            textDecoration: "underline",
+          }}
+        >
+          Fire Protection Systems:
+        </h3>
+        <p
+          style={{
+            textAlign: "justify",
+            lineHeight: "1.6",
+            fontSize: "14px",
+          }}
+        >
+          {project?.fireProtectionDescription || "The proposed space is fully sprinkled. The fire sprinkler system enters the space from the main distribution lines. The space is served by the building fire alarm system."}
+        </p>
+      </div>
+
+      {/* Critical Issues Section */}
+      <div style={{ marginBottom: "30px" }}>
+        <h3
+          style={{
+            fontSize: "16px",
+            fontWeight: "bold",
+            marginBottom: "15px",
+            textDecoration: "underline",
+          }}
+        >
+          Critical Issues:
+        </h3>
+        <p
+          style={{
+            textAlign: "justify",
+            lineHeight: "1.6",
+            fontSize: "14px",
+          }}
+        >
+          {project?.criticalIssues || "None identified at the time of survey."}
+        </p>
+      </div>
+
+      {/* Closing */}
+      <div style={{ marginBottom: "30px" }}>
+        <p style={{ lineHeight: "1.6", fontSize: "14px" }}>
+          If you have any questions, please let me know.
+        </p>
+        <p style={{ lineHeight: "1.6", fontSize: "14px", marginTop: "20px" }}>
+          Sincerely,
+        </p>
+        <p style={{ lineHeight: "1.6", fontSize: "14px", marginTop: "40px" }}>
+          {project?.surveyorName || "Surveyor Name"}
+        </p>
+        <p style={{ lineHeight: "1.6", fontSize: "14px" }}>
+          Schnackel Engineers
+        </p>
+      </div>
+
       {/* Export Buttons - Only show when not in live preview */}
       {!isLivePreview && (
         <div
@@ -2489,7 +2804,7 @@ const ReportGenerator = ({
         </p>
         <p style={{ margin: 0 }}>
           <strong>Survey Date:</strong>{" "}
-          {new Date(project.surveyDate).toLocaleDateString()}
+          {project?.surveyDate ? new Date(project.surveyDate + 'T00:00:00').toLocaleDateString() : new Date().toLocaleDateString()}
         </p>
         {isLivePreview && (
           <p

@@ -17,6 +17,11 @@ async function updateLambda() {
     // Add Lambda function
     archive.file("lambda/quickAnalysis.js", { name: "quickAnalysis.js" });
 
+    // Add reference images for visual training
+    archive.file("reference-images/electric-rtu-reference.jpg.png", { name: "electric-rtu-reference.jpg.png" });
+    archive.file("reference-images/gas-rtu-reference.jpg.png", { name: "gas-rtu-reference.jpg.png" });
+    archive.file("reference-images/fuse-disconnect-reference.jpg.png", { name: "fuse-disconnect-reference.jpg.png" });
+
     // Add node_modules
     archive.directory("node_modules/", "node_modules");
 

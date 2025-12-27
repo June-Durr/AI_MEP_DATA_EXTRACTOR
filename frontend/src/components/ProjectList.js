@@ -145,6 +145,29 @@ const ProjectList = () => {
           >
             ⚡ Add Electrical Panels
           </button>
+          <button
+            onClick={() => navigate(`/advanced-electrical/${showReportFor.id}`)}
+            className="btn"
+            style={{
+              backgroundColor: "#17a2b8",
+              color: "white",
+            }}
+          >
+            🤖 AI Electrical Survey
+          </button>
+          {(showReportFor.electricalPanels?.length > 0 ||
+            showReportFor.electricalEquipment?.length > 0) && (
+            <button
+              onClick={() => navigate(`/testing-report/${showReportFor.id}`)}
+              className="btn"
+              style={{
+                backgroundColor: "#6610f2",
+                color: "white",
+              }}
+            >
+              📊 Testing & Diagnostics
+            </button>
+          )}
         </div>
         <ReportGenerator
           project={showReportFor}
@@ -606,10 +629,48 @@ const ProjectList = () => {
                 </button>
               </div>
 
-              {/* Second row - View Report and Delete buttons */}
+              {/* Second row - AI Electrical and Testing buttons */}
+              <div
+                style={{ display: "flex", gap: "10px", marginBottom: "10px" }}
+              >
+                <button
+                  onClick={() => navigate(`/advanced-electrical/${project.id}`)}
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    padding: "10px",
+                    fontSize: "14px",
+                    backgroundColor: "#17a2b8",
+                    color: "white",
+                  }}
+                  title="AI-powered equipment classification and analysis"
+                >
+                  🤖 AI Electrical Survey
+                </button>
+                {(project.electricalPanels?.length > 0 ||
+                  project.electricalEquipment?.length > 0) && (
+                  <button
+                    onClick={() => navigate(`/testing-report/${project.id}`)}
+                    className="btn"
+                    style={{
+                      flex: 1,
+                      padding: "10px",
+                      fontSize: "14px",
+                      backgroundColor: "#6610f2",
+                      color: "white",
+                    }}
+                    title="View confidence scores and diagnostics"
+                  >
+                    📊 Testing & Diagnostics
+                  </button>
+                )}
+              </div>
+
+              {/* Third row - View Report and Delete buttons */}
               <div style={{ display: "flex", gap: "10px" }}>
                 {(project.rtus?.length > 0 ||
-                  project.electricalPanels?.length > 0) && (
+                  project.electricalPanels?.length > 0 ||
+                  project.electricalEquipment?.length > 0) && (
                   <button
                     onClick={() => viewReport(project)}
                     className="btn btn-success"

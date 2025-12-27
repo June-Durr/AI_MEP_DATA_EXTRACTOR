@@ -1,0 +1,59 @@
+.gap-detection-panel {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.status-badge {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.status-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.gap-detection-panel button {
+  transition: all 0.2s ease-in-out;
+}
+
+.gap-detection-panel button:not(:disabled):hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.gap-detection-panel button:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.gap-detection-panel button:disabled {
+  opacity: 0.6;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .gap-detection-panel {
+    padding: 15px;
+  }
+
+  .gap-detection-panel h2 {
+    font-size: 20px;
+  }
+
+  .gap-detection-panel h3 {
+    font-size: 16px;
+  }
+
+  .status-badge div:first-child {
+    font-size: 20px !important;
+  }
+
+  .gap-detection-panel > div:last-child {
+    flex-direction: column;
+  }
+
+  .gap-detection-panel > div:last-child button {
+    width: 100%;
+  }
+}

@@ -9,6 +9,8 @@ import {
 } from "react-router-dom";
 import Camera from "./components/Camera";
 import ElectricalSurvey from "./components/ElectricalSurvey";
+import AdvancedElectricalSurvey from "./components/AdvancedElectricalSurvey";
+import TestingReportView from "./components/TestingReportView";
 import ProjectList from "./components/ProjectList";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./App.css";
@@ -101,6 +103,8 @@ function AppContent() {
             <Route path="/camera" element={<Camera />} />
             <Route path="/camera/:projectId" element={<Camera />} />
             <Route path="/electrical/:projectId" element={<ElectricalSurvey />} />
+            <Route path="/advanced-electrical/:projectId" element={<AdvancedElectricalSurvey />} />
+            <Route path="/testing-report/:projectId" element={<TestingReportView />} />
           </Routes>
         </Suspense>
       </ErrorBoundary>
