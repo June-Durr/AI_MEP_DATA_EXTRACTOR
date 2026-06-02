@@ -24,6 +24,9 @@ const emptyRtu = () => ({
   age: "",
   aiStatus: "Not analyzed",
   notes: "",
+  gasPipeSize: "",
+  gasRoute: "",
+  gasNotes: "",
   photos: [],
 });
 
@@ -221,7 +224,11 @@ const buildMechanicalNarrative = (report) => {
       const year = rtu.manufacturingYear
         ? ` in ${rtu.manufacturingYear}`
         : " with the manufacturing year not legible on the nameplate";
-      return `The ${ordinalWord(index)} unit ${designation}is a ${tonnage}model manufactured by ${manufacturer}${year}.`;
+      const gasText =
+        rtu.heatType === "Gas"
+          ? `${rtu.gasPipeSize ? ` The unit is served by a ${rtu.gasPipeSize} gas line` : " Gas line size should be verified"}${rtu.gasRoute ? ` routed ${polishFieldNote(rtu.gasRoute, "route").replace(/\.$/, "")}` : ""}.${rtu.gasNotes ? ` ${polishFieldNote(rtu.gasNotes, "general")}` : ""}`
+          : "";
+      return `The ${ordinalWord(index)} unit ${designation}is a ${tonnage}model manufactured by ${manufacturer}${year}.${gasText}`;
     })
     .join(" ");
 
@@ -1195,6 +1202,23 @@ export default function FieldReportBuilder() {
                         </select>
                       </Field>
                     </div>
+                    {rtu.heatType === "Gas" && (
+                      <div className="field-report-grid" style={{ marginTop: 14 }}>
+                        <Field label="Gas Pipe Size" help="Show only for gas-fired RTUs. Use the pipe size serving this RTU if observed.">
+                          <input className="field-report-input" placeholder='3/4", 1", 1-1/4"' {...inputProps(rtu.gasPipeSize, (value) => updateRtu(rtu.id, { gasPipeSize: value }))} />
+                        </Field>
+                        <Field label="Gas Route">
+                          <input className="field-report-input" placeholder="from exterior gas meter to roof, then to RTU-1" {...inputProps(rtu.gasRoute, (value) => updateRtu(rtu.id, { gasRoute: value }))} />
+                        </Field>
+                        <Field label="Gas Notes" full>
+                          <textarea
+                            className="field-report-textarea"
+                            placeholder="Example: Gas shutoff located adjacent to unit. Pipe size could not be verified at roof curb."
+                            {...inputProps(rtu.gasNotes, (value) => updateRtu(rtu.id, { gasNotes: value }))}
+                          />
+                        </Field>
+                      </div>
+                    )}
                   </div>
                   <div className="field-report-form-section">
                     <h4>3. Verify AI-Extracted Nameplate Data</h4>
