@@ -133,6 +133,12 @@ exports.handler = async (event) => {
   try {
     let body = JSON.parse(event.body);
     const { imageBase64, images, equipmentType } = body;
+    const includeReferenceImages = body.includeReferenceImages === true;
+    const currentYear = new Date().getFullYear();
+    const modelId =
+      process.env.BEDROCK_MODEL_ID ||
+      "anthropic.claude-sonnet-4-6";
+    const maxTokens = Number(process.env.BEDROCK_MAX_TOKENS || 4000);
 
     // Support both single image (imageBase64) and multiple images (images array)
     const imagesToAnalyze = images && images.length > 0 ? images : [imageBase64];
@@ -160,13 +166,16 @@ exports.handler = async (event) => {
       };
     }
 
-    // Load reference images for training (optional, non-blocking)
-    try {
+    // Reference images are expensive because each request pays to re-send them.
+    // Keep them available for difficult cases, but default to prompt-only extraction.
+    if (includeReferenceImages && (equipmentType === 'hvac' || !equipmentType)) {
+      try {
       console.log('Loading reference images...');
       referenceImages = loadReferenceImages();
       console.log('✓ Reference images loaded');
-    } catch (error) {
-      console.error('Failed to load reference images, continuing without them:', error.message);
+      } catch (error) {
+        console.error('Failed to load reference images, continuing without them:', error.message);
+      }
     }
 
     // Enhance all images for better OCR
@@ -177,15 +186,17 @@ exports.handler = async (event) => {
     console.log('✓ Image enhancement completed');
 
     // COMPREHENSIVE PROMPT WITH VISUAL REFERENCE TRAINING
-    const comprehensivePrompt = `You are an expert MEP engineer analyzing an HVAC equipment nameplate. You have been trained on reference images that show EXACTLY where each field is located on RTU nameplates.
+    const comprehensivePrompt = `You are an expert MEP engineer analyzing an HVAC equipment nameplate. Extract visible nameplate data for an MEP survey report.
 
 CRITICAL: Your response must be ONLY valid JSON with no additional text before or after. Do not include explanations, markdown code blocks, or any other text. Start your response with { and end with }.
 
 IMPORTANT: The images you receive have been preprocessed and enhanced (sharpened, contrast-adjusted, upscaled) to improve readability.
 
-**VISUAL REFERENCE TRAINING - YOU HAVE BEEN SHOWN THESE LABELED EXAMPLES:**
+Use ${currentYear} as the current year for manufacturing age and service-life calculations.
 
-Before this nameplate image, you were shown marked-up reference images with colored clouds/boxes showing:
+**RTU NAMEPLATE EXTRACTION MAP:**
+
+Use these labeled examples as a mental map for common RTU nameplate layouts:
 
 **ELECTRIC RTU REFERENCE (Cloud Labels):**
 - Cloud #1 - Compressor Section (TOP ROW): Extract Compressor #1 data from top row #1 (COMP A): Voltage, Phase, RLA, LRA
@@ -227,7 +238,7 @@ You should extract:
 - model: "50TCA06A2A5A0A0A0"
 - serialNumber: "1315A12345"
 - manufacturingYear: "2013" (13 from serial = 2013)
-- currentAge: "12" (2025 - 2013)
+- currentAge: "${currentYear - 2013}" (${currentYear} - 2013)
 - cooling.tonnage: "5 tons" (Model contains 06 = 60,000 BTU = 5 tons)
 - electrical.phase: "3"
 - compressor1.rla: Read from COMP A row, RLA column
@@ -315,8 +326,8 @@ CRITICAL INSTRUCTIONS:
 
    **GENERAL DECODING RULES:**
    - If serial format doesn't match known patterns: use "Not legible" for year and age
-   - Current year for age calculation: 2025
-   - Age = 2025 - manufacturing year
+   - Current year for age calculation: ${currentYear}
+   - Age = ${currentYear} - manufacturing year
    - If you identify year as 2006, age = 19 years
    - If you identify year as 2015, age = 10 years
 
@@ -469,7 +480,7 @@ EXAMPLE FOR LENNOX LCA120H2RN1Y, Serial 5608D05236:
 - Serial 5608 = Year 2006 (56 = 06, 08 = week 8)
 - manufacturingYear: "2006"
 - currentAge: "19"
-- Age = 2025 - 2006 = 19 years
+- Age = ${currentYear} - 2006 = ${currentYear - 2006} years
 - Model LCA120 = 10 tons (120 MBH / 12 = 10 tons)
 - Status: BEYOND SERVICE LIFE
 
@@ -478,7 +489,7 @@ EXAMPLE FOR CARRIER, Serial 5210ABCDEF:
 - Serial 5210 = Year 2002 (52 = 02), week 10
 - manufacturingYear: "2002"
 - currentAge: "23"
-- Age = 2025 - 2002 = 23 years
+- Age = ${currentYear} - 2002 = ${currentYear - 2002} years
 - Status: BEYOND SERVICE LIFE
 
 EXAMPLE FOR YORK, Serial MCAH123456:
@@ -486,7 +497,7 @@ EXAMPLE FOR YORK, Serial MCAH123456:
 - Serial MCAH = M = 2015
 - manufacturingYear: "2015"
 - currentAge: "10"
-- Age = 2025 - 2015 = 10 years
+- Age = ${currentYear} - 2015 = ${currentYear - 2015} years
 - Status: Within service life
 
 EXAMPLE FOR GOODMAN, Serial 1305123456:
@@ -494,7 +505,7 @@ EXAMPLE FOR GOODMAN, Serial 1305123456:
 - Serial 1305 = Year 2013 (13), month 05 (May)
 - manufacturingYear: "2013"
 - currentAge: "12"
-- Age = 2025 - 2013 = 12 years
+- Age = ${currentYear} - 2013 = ${currentYear - 2013} years
 - Status: Within service life
 
 Extract all visible information now. Apply the serial number decoding rules based on the manufacturer you identify. RETURN ONLY JSON, NO OTHER TEXT.`;
@@ -971,7 +982,7 @@ Extract all visible information from the transformer nameplate. Be realistic abo
       });
 
       // Add reference images for visual training (only for HVAC equipment)
-      if ((equipmentType === 'hvac' || !equipmentType) && referenceImages) {
+      if (includeReferenceImages && (equipmentType === 'hvac' || !equipmentType) && referenceImages) {
         let hasAnyReference = false;
 
         // Add electric RTU reference
@@ -1067,19 +1078,21 @@ Extract all visible information from the transformer nameplate. Be realistic abo
       } else {
         content.push({
           type: "text",
-          text: "Extract all information from this image following the extraction pattern from the reference images above. If this is a disconnect box with fuses, read the fuse amperage directly from the fuse labels."
+          text: includeReferenceImages
+            ? "Extract all information from this image following the extraction pattern from the reference images above. If this is a disconnect box with fuses, read the fuse amperage directly from the fuse labels."
+            : "Extract all visible information from this image. If this is a disconnect box with fuses, read the fuse amperage directly from the fuse labels."
         });
       }
     }
 
     const response = await bedrock
       .invokeModel({
-        modelId: "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+        modelId,
         contentType: "application/json",
         accept: "application/json",
         body: JSON.stringify({
           anthropic_version: "bedrock-2023-05-31",
-          max_tokens: 4000,
+          max_tokens: maxTokens,
           temperature: 0.1,
           messages: [
             {
@@ -1180,7 +1193,7 @@ Extract all visible information from the transformer nameplate. Be realistic abo
           outputCost,
           totalCost,
           estimatedCost: totalCost,
-          model: "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+          model: modelId
         },
         timestamp: new Date().toISOString(),
       }),

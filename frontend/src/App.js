@@ -11,6 +11,7 @@ import Camera from "./components/Camera";
 import ElectricalSurvey from "./components/ElectricalSurvey";
 import AdvancedElectricalSurvey from "./components/AdvancedElectricalSurvey";
 import TestingReportView from "./components/TestingReportView";
+import FieldReportBuilder from "./components/FieldReportBuilder";
 import ProjectList from "./components/ProjectList";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./App.css";
@@ -85,6 +86,19 @@ function AppContent() {
             >
               📸 Scan Equipment
             </Link>
+            <Link
+              to="/field-report"
+              className="btn"
+              style={{
+                textDecoration: "none",
+                fontSize: "14px",
+                padding: "8px 16px",
+                backgroundColor: "#0f766e",
+                color: "white",
+              }}
+            >
+              Field Report
+            </Link>
           </div>
         </div>
       </nav>
@@ -105,6 +119,8 @@ function AppContent() {
             <Route path="/electrical/:projectId" element={<ElectricalSurvey />} />
             <Route path="/advanced-electrical/:projectId" element={<AdvancedElectricalSurvey />} />
             <Route path="/testing-report/:projectId" element={<TestingReportView />} />
+            <Route path="/field-report" element={<FieldReportBuilder />} />
+            <Route path="/field-report/:projectId" element={<FieldReportBuilder />} />
           </Routes>
         </Suspense>
       </ErrorBoundary>

@@ -3,12 +3,38 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ReportGenerator from "./ReportGenerator";
 import ImageDropZone from "./ImageDropZone";
+import { getProjectById, updateProject } from "../utils/projectStore";
+
+const DEBUG_CAMERA = process.env.NODE_ENV === "development";
+const CURRENT_REPORT_YEAR = new Date().getFullYear();
+
+const calculateAgeFromYear = (year) => {
+  const match = String(year || "").match(/\b(19|20)\d{2}\b/);
+  if (!match) return "";
+  const numericYear = Number(match[0]);
+  if (!numericYear || numericYear > CURRENT_REPORT_YEAR) return "";
+  return String(CURRENT_REPORT_YEAR - numericYear);
+};
+
+const inferHeatTypeFromData = (data) => {
+  const combined = [
+    data?.systemType?.configuration,
+    data?.systemType?.type,
+    data?.heating?.type,
+    data?.gasInformation?.gasType,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (combined.includes("gas")) return "Gas";
+  if (combined.includes("electric")) return "Electric";
+  return "";
+};
 
 const Camera = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
-
-  console.log('[Camera] Component rendered, projectId:', projectId);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -39,23 +65,14 @@ const Camera = () => {
 
   // Load project function wrapped in useCallback
   const loadProject = useCallback(() => {
-    console.log('[Camera] loadProject called, projectId:', projectId);
-    const savedProjects = localStorage.getItem("mep-survey-projects");
-    if (savedProjects) {
-      const projects = JSON.parse(savedProjects);
-      console.log('[Camera] All projects:', projects);
-      const foundProject = projects.find((p) => p.id === projectId);
-      console.log('[Camera] Found project:', foundProject);
-      if (foundProject) {
-        setProject(foundProject);
-        const rtus = foundProject.rtus || [];
-        setProjectRTUs(rtus);
-        setCurrentRTUNumber(rtus.length + 1);
-      } else {
-        console.warn('[Camera] Project not found with id:', projectId);
-      }
+    const foundProject = getProjectById(projectId);
+    if (foundProject) {
+      setProject(foundProject);
+      const rtus = foundProject.rtus || [];
+      setProjectRTUs(rtus);
+      setCurrentRTUNumber(rtus.length + 1);
     } else {
-      console.warn('[Camera] No saved projects in localStorage');
+      console.warn("[Camera] Project not found with id:", projectId);
     }
   }, [projectId]);
 
@@ -66,41 +83,59 @@ const Camera = () => {
     }
   }, [projectId, loadProject]);
 
-  const saveRTUToProject = (rtuData) => {
-    const savedProjects = localStorage.getItem("mep-survey-projects");
-    if (savedProjects) {
-      const projects = JSON.parse(savedProjects);
-      const projectIndex = projects.findIndex((p) => p.id === projectId);
+  useEffect(() => {
+    if (!extractedData) return;
 
-      if (projectIndex !== -1) {
-        const rtu = {
-          id: `rtu-${Date.now()}`,
-          number: currentRTUNumber,
-          data: {
-            ...rtuData,
-            // Include user inputs with the AI data
-            condition: userInputs.condition,
-            heatType: userInputs.heatType,
-            gasPipeSize:
-              userInputs.heatType === "Gas" ? userInputs.gasPipeSize : null,
-          },
-          // REMOVED image storage to fix quota error
-          capturedAt: new Date().toISOString(),
-        };
+    const inferredHeatType = inferHeatTypeFromData(extractedData);
+    const manufacturingYear = extractedData.basicInfo?.manufacturingYear;
+    const calculatedAge = calculateAgeFromYear(manufacturingYear);
 
-        if (!projects[projectIndex].rtus) {
-          projects[projectIndex].rtus = [];
-        }
+    if (manufacturingYear && calculatedAge && !extractedData.basicInfo?.currentAge) {
+      setExtractedData((current) => ({
+        ...current,
+        basicInfo: {
+          ...(current?.basicInfo || {}),
+          currentAge: current?.basicInfo?.currentAge || calculatedAge,
+        },
+      }));
+    }
 
-        projects[projectIndex].rtus.push(rtu);
-        projects[projectIndex].lastModified = new Date().toISOString();
-
-        localStorage.setItem("mep-survey-projects", JSON.stringify(projects));
-
-        setProjectRTUs(projects[projectIndex].rtus);
-        return true;
+    if (inferredHeatType && userInputs.heatType !== inferredHeatType) {
+      if (inferredHeatType) {
+        setUserInputs((current) => ({
+          ...current,
+          heatType: inferredHeatType,
+          gasPipeSize: inferredHeatType === "Gas" ? current.gasPipeSize : "",
+        }));
       }
     }
+  }, [extractedData, userInputs.heatType]);
+
+  const saveRTUToProject = (rtuData) => {
+    const rtu = {
+      id: `rtu-${Date.now()}`,
+      number: currentRTUNumber,
+      data: {
+        ...rtuData,
+        condition: userInputs.condition,
+        heatType: userInputs.heatType,
+        gasPipeSize:
+          userInputs.heatType === "Gas" ? userInputs.gasPipeSize : null,
+      },
+      capturedAt: new Date().toISOString(),
+    };
+
+    const updatedProject = updateProject(projectId, (projectToUpdate) => ({
+      ...projectToUpdate,
+      rtus: [...(projectToUpdate.rtus || []), rtu],
+    }));
+
+    if (updatedProject) {
+      setProject(updatedProject);
+      setProjectRTUs(updatedProject.rtus || []);
+      return true;
+    }
+
     return false;
   };
 
@@ -316,10 +351,12 @@ const Camera = () => {
         process.env.REACT_APP_API_URL ||
         "https://jqyt5l9x73.execute-api.us-east-1.amazonaws.com/prod";
 
-      console.log('[Camera] Sending to API:', {
-        equipmentType: 'hvac',
-        imageCount: capturedImages.length
-      });
+      if (DEBUG_CAMERA) {
+        console.log("[Camera] Sending to API:", {
+          equipmentType: "hvac",
+          imageCount: capturedImages.length,
+        });
+      }
 
       // Extract base64 data from all images (remove data:image/jpeg;base64, prefix)
       const allBase64Images = capturedImages.map(img => img.split(",")[1]);
@@ -341,11 +378,15 @@ const Camera = () => {
 
       const responseData = await response.json();
 
-      console.log('[Camera] AI Response:', responseData);
+      if (DEBUG_CAMERA) {
+        console.log("[Camera] AI Response:", responseData);
+      }
 
       if (responseData.success) {
-        console.log('[Camera] Extracted data:', responseData.data);
-        console.log('[Camera] Token usage:', responseData.usage);
+        if (DEBUG_CAMERA) {
+          console.log("[Camera] Extracted data:", responseData.data);
+          console.log("[Camera] Token usage:", responseData.usage);
+        }
 
         // Check if data is empty or all fields are "Not Available"
         const hasData = responseData.data && Object.keys(responseData.data).length > 0;
@@ -399,10 +440,7 @@ const Camera = () => {
   // Gas pipe size options
   const gasPipeSizes = ['3/4"', '1"', '1 1/4"', '1 1/2"'];
 
-  console.log('[Camera] Render check - projectId:', projectId, 'project:', project);
-
   if (!projectId) {
-    console.log('[Camera] No projectId, showing error message');
     return (
       <div className="container">
         <div

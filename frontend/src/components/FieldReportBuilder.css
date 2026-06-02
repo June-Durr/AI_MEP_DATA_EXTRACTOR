@@ -1,0 +1,427 @@
+.field-report-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.field-report-sidebar {
+  position: sticky;
+  top: 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.field-report-step-list {
+  display: grid;
+  gap: 8px;
+}
+
+.field-report-step {
+  width: 100%;
+  border: 1px solid #d8dde6;
+  background: #fff;
+  color: #334155;
+  border-radius: 6px;
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.field-report-step.active {
+  border-color: #0f766e;
+  background: #ecfdf5;
+  color: #134e4a;
+  font-weight: 700;
+}
+
+.field-report-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.field-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.field-report-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.field-report-form-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.field-report-form-section h4 {
+  margin: 0 0 12px;
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.field-report-upload-first {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #99f6e4;
+  border-radius: 8px;
+  background: #f0fdfa;
+}
+
+.field-report-field {
+  display: grid;
+  gap: 6px;
+}
+
+.field-report-field.full {
+  grid-column: 1 / -1;
+}
+
+.field-report-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.field-report-help {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.field-report-input,
+.field-report-select,
+.field-report-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 14px;
+  color: #0f172a;
+  background: #fff;
+}
+
+.field-report-input:focus,
+.field-report-select:focus,
+.field-report-textarea:focus {
+  outline: 2px solid rgba(15, 118, 110, 0.18);
+  border-color: #0f766e;
+}
+
+.field-report-textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.field-report-control-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.field-report-guide {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid #0f766e;
+  background: #ecfdf5;
+  color: #0f766e;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.field-report-guide-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border-left: 4px solid #0f766e;
+  background: #f0fdfa;
+  color: #134e4a;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.field-report-help-button {
+  justify-self: start;
+  border: 1px solid #0f766e;
+  background: #fff;
+  color: #0f766e;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.field-report-select-other {
+  display: grid;
+  gap: 8px;
+}
+
+.field-report-alert-box {
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  background: #f0f9ff;
+  color: #0f172a;
+}
+
+.field-report-alert-box ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.field-report-progress {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.field-report-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #334155;
+  font-size: 13px;
+}
+
+.field-report-progress-head span {
+  color: #64748b;
+}
+
+.field-report-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.field-report-progress-bar {
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: #0f766e;
+  transition: width 0.25s ease;
+}
+
+.field-report-progress.active .field-report-progress-bar {
+  width: 55%;
+  animation: field-report-progress 1.2s ease-in-out infinite;
+}
+
+.field-report-progress.complete {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.field-report-progress.complete .field-report-progress-bar {
+  width: 100%;
+  background: #16a34a;
+}
+
+@keyframes field-report-progress {
+  0% {
+    transform: translateX(-80%);
+  }
+  50% {
+    transform: translateX(65%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.field-report-visual-guide {
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  padding: 18px;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.field-report-visual-guide code {
+  background: #e2e8f0;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.field-report-diagram-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.field-report-diagram-card {
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.field-report-diagram-card h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.field-report-diagram-card svg {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  background: white;
+}
+
+.field-report-diagram-card text {
+  font-size: 13px;
+  fill: #0f172a;
+  font-weight: 700;
+}
+
+.field-report-diagram-card p {
+  margin: 8px 0 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.field-report-guide-image {
+  margin: 14px 0 0;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.field-report-guide-image-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field-report-guide-image-grid .field-report-guide-image {
+  margin-top: 0;
+}
+
+.field-report-guide-image img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: white;
+}
+
+.field-report-guide-image figcaption {
+  margin-top: 8px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 700px) {
+  .field-report-diagram-grid,
+  .field-report-guide-image-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field-report-toggle {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 9px 12px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.field-report-toggle.active {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: #fff;
+}
+
+.field-report-rtu {
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 14px;
+  background: #f8fafc;
+}
+
+.field-report-preview {
+  font-family: Georgia, "Times New Roman", serif;
+  color: #111827;
+  line-height: 1.55;
+  background: #fff;
+}
+
+.field-report-preview h3 {
+  font-size: 16px;
+  margin: 20px 0 8px;
+  text-decoration: underline;
+}
+
+.field-report-preview p {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.field-report-warning-list {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  color: #92400e;
+}
+
+.field-report-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.field-report-modal {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 8px;
+  padding: 22px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.24);
+}
+
+@media (max-width: 900px) {
+  .field-report-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .field-report-sidebar {
+    position: static;
+  }
+
+  .field-report-grid,
+  .field-report-grid.three {
+    grid-template-columns: 1fr;
+  }
+}

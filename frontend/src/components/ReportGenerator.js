@@ -13,6 +13,14 @@ const ReportGenerator = ({
   equipmentType = "hvac",
   currentEquipmentSubtype = null,
 }) => {
+  const currentReportYear = new Date().getFullYear();
+  const calculateAgeFromYear = (year) => {
+    const match = String(year || "").match(/\b(19|20)\d{2}\b/);
+    if (!match) return 0;
+    const numericYear = Number(match[0]);
+    if (!numericYear || numericYear > currentReportYear) return 0;
+    return currentReportYear - numericYear;
+  };
   const [isEditing, setIsEditing] = useState(false);
   const [editedReport, setEditedReport] = useState("");
   const [editingRTUs, setEditingRTUs] = useState({}); // Track which RTUs are being edited
@@ -154,16 +162,18 @@ const ReportGenerator = ({
     const data = rtu.data || {};
 
     // Handle both old flat structure and new nested structure
+    const manufacturingYear =
+      data.basicInfo?.manufacturingYear ||
+      data.manufacturingYear ||
+      "Unknown";
+
     return {
       manufacturer:
         data.basicInfo?.manufacturer || data.manufacturer || "Unknown",
       model: data.basicInfo?.model || data.model || "Unknown",
       serialNumber: data.basicInfo?.serialNumber || data.serialNumber || "",
-      year:
-        data.basicInfo?.manufacturingYear ||
-        data.manufacturingYear ||
-        "Unknown",
-      age: data.basicInfo?.currentAge || data.currentAge || 0,
+      year: manufacturingYear,
+      age: data.basicInfo?.currentAge || data.currentAge || calculateAgeFromYear(manufacturingYear),
       tonnage: data.cooling?.tonnage || data.tonnage || "Unknown tonnage",
       serviceLifeAssessment:
         data.serviceLife?.assessment || data.serviceLifeAssessment || "",
@@ -402,9 +412,9 @@ const ReportGenerator = ({
 
   const mechanicalSystemsReport = `${generateOpeningSentence()} ${generateRTUDescriptions()} ${generateReplacementText()}${
     squareFootage
-      ? ` With the proposed space being approximately ${parseFloat(
+      ? ` With the proposed space being approximately ${Math.round(parseFloat(
           squareFootage
-        ).toLocaleString()}sqft., Schnackel Engineers estimates ${coolingEstimate}-tons of cooling will be required, however complete heat gain/loss calculations will be performed to determine the exact amount of cooling required.`
+        )).toLocaleString()} sq. ft., Schnackel Engineers estimates ${coolingEstimate} tons of cooling will be required. This preliminary estimate is based on a typical planning range of 400 to 600 sq. ft. per ton; complete heat gain/loss calculations will be performed to determine the exact amount of cooling required.`
       : ""
   }${project?.ductworkDescription ? ` ${project.ductworkDescription}` : " The majority of ductwork in the space is interior insulated rectangular sheet metal ductwork with insulated flexible diffuser connections."}`;
 

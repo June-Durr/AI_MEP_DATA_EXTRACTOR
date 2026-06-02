@@ -2,6 +2,13 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import ReportGenerator from "./ReportGenerator";
+import {
+  addProject,
+  createProjectRecord,
+  deleteProjectById,
+  getProjectById,
+  listProjects,
+} from "../utils/projectStore";
 
 const ProjectList = () => {
   const navigate = useNavigate();
@@ -25,26 +32,21 @@ const ProjectList = () => {
 
   useEffect(() => {
     loadProjects();
-    if (reportProjectId) {
-      const project = projects.find((p) => p.id === reportProjectId);
-      if (project) {
-        setShowReportFor(project);
-      }
+  }, []);
+
+  useEffect(() => {
+    if (!reportProjectId) {
+      return;
     }
-  }, [reportProjectId, projects]);
+
+    const project = getProjectById(reportProjectId);
+    if (project) {
+      setShowReportFor(project);
+    }
+  }, [reportProjectId]);
 
   const loadProjects = () => {
-    const savedProjects = localStorage.getItem("mep-survey-projects");
-    if (savedProjects) {
-      const parsed = JSON.parse(savedProjects);
-      setProjects(
-        parsed.sort(
-          (a, b) =>
-            new Date(b.lastModified || b.createdAt) -
-            new Date(a.lastModified || a.createdAt)
-        )
-      );
-    }
+    setProjects(listProjects());
   };
 
   const createProject = () => {
@@ -53,22 +55,8 @@ const ProjectList = () => {
       return;
     }
 
-    const project = {
-      id: `project-${Date.now()}`,
-      ...newProject,
-      rtus: [],
-      electricalPanels: [],
-      createdAt: new Date().toISOString(),
-      lastModified: new Date().toISOString(),
-    };
-
-    const savedProjects = localStorage.getItem("mep-survey-projects");
-    const existingProjects = savedProjects ? JSON.parse(savedProjects) : [];
-    existingProjects.push(project);
-    localStorage.setItem(
-      "mep-survey-projects",
-      JSON.stringify(existingProjects)
-    );
+    const project = createProjectRecord(newProject);
+    const existingProjects = addProject(project);
 
     setProjects(existingProjects);
     setShowNewProjectForm(false);
@@ -90,13 +78,7 @@ const ProjectList = () => {
 
   const deleteProject = (projectId) => {
     if (window.confirm("Delete this project? This cannot be undone.")) {
-      const savedProjects = localStorage.getItem("mep-survey-projects");
-      if (savedProjects) {
-        const existingProjects = JSON.parse(savedProjects);
-        const filtered = existingProjects.filter((p) => p.id !== projectId);
-        localStorage.setItem("mep-survey-projects", JSON.stringify(filtered));
-        setProjects(filtered);
-      }
+      setProjects(deleteProjectById(projectId));
     }
   };
 
@@ -664,6 +646,23 @@ const ProjectList = () => {
                     📊 Testing & Diagnostics
                   </button>
                 )}
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                <button
+                  onClick={() => navigate(`/field-report/${project.id}`)}
+                  className="btn"
+                  style={{
+                    flex: 1,
+                    padding: "10px",
+                    fontSize: "14px",
+                    backgroundColor: "#0f766e",
+                    color: "white",
+                  }}
+                  title="Create a client-ready MEP existing conditions report"
+                >
+                  Field Report Builder
+                </button>
               </div>
 
               {/* Third row - View Report and Delete buttons */}
