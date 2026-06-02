@@ -146,6 +146,12 @@ const sentenceCase = (value) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
+const ensureSentence = (value) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.replace(/\s+\./g, ".").replace(/([^.!?])$/, "$1.");
+};
+
 const polishFieldNote = (value, context = "general") => {
   let text = String(value || "").trim();
   if (!text) return "";
@@ -153,24 +159,43 @@ const polishFieldNote = (value, context = "general") => {
   text = text
     .replace(/\s+/g, " ")
     .replace(/\bi saw\b/gi, "")
+    .replace(/\bi observed\b/gi, "")
     .replace(/\bi believe\b/gi, "")
     .replace(/\bi think\b/gi, "")
+    .replace(/\bit came in\b/gi, "it routes")
+    .replace(/\bwhre\b/gi, "were")
     .replace(/\btheyre\b/gi, "they are")
     .replace(/\btheyre\b/gi, "they are")
     .replace(/\bductowkr\b/gi, "ductwork")
     .replace(/\binut\b/gi, "input")
     .replace(/\bback right side\b/gi, "rear right side")
     .replace(/\bcame in from\b/gi, "enters from")
+    .replace(/\bcomes in from\b/gi, "enters from")
     .replace(/\bwent underground\b/gi, "routes underground")
     .replace(/\bcame up into\b/gi, "rises into")
+    .replace(/\bwent up\b/gi, "rises")
+    .replace(/\bcame down\b/gi, "drops")
+    .replace(/\bfrom the back\b/gi, "from the rear")
+    .replace(/\bmain power\b/gi, "electrical service")
+    .replace(/\bpower came in\b/gi, "electrical service enters")
+    .replace(/\bwire came in\b/gi, "service conductors enter")
+    .replace(/\blooked good\b/gi, "appeared to be in good condition")
     .replace(/\bover the office area\b/gi, "above the office area")
+    .replace(/\babove the office area\b/gi, "above the office area")
+    .replace(/\bmounted to the ground\b/gi, "floor-mounted")
+    .replace(/\bmounted to ground\b/gi, "floor-mounted")
+    .replace(/\bdual handle\b/gi, "dual-handle")
+    .replace(/\bdouble handle\b/gi, "dual-handle")
+    .replace(/\btoilets\b/gi, "water closets")
+    .replace(/\bbathrooms\b/gi, "toilet rooms")
+    .replace(/\bsinks\b/gi, "lavatories")
     .replace(/\bforgot what they are called\b/gi, "with flexible diffuser connections")
     .replace(/\bforgo what theyre called\b/gi, "with flexible diffuser connections")
     .replace(/\bforgo what they are called\b/gi, "with flexible diffuser connections")
     .replace(/\bsock\b/gi, "flexible duct connection");
 
   if (context === "route") {
-    text = text.replace(/^runs?\s+/i, "").replace(/^goes?\s+/i, "");
+    text = text.replace(/^runs?\s+/i, "").replace(/^goes?\s+/i, "").replace(/^routes?\s+/i, "");
   }
 
   if (context === "ductwork") {
@@ -180,20 +205,92 @@ const polishFieldNote = (value, context = "general") => {
   }
 
   if (context === "plumbing-location") {
-    text = text.replace(/^the service is located\s+/i, "");
+    text = text
+      .replace(/^the service is located\s+/i, "")
+      .replace(/^the main water line\s+/i, "The water service ")
+      .replace(/\bwater meter was\b/gi, "water meter is")
+      .replace(/\bthe water meter was\b/gi, "the water meter is");
   }
 
-  return sentenceCase(text).replace(/\s+\./g, ".").replace(/([^.!?])$/, "$1.");
+  return ensureSentence(sentenceCase(text));
 };
 
 const formatFixtureSummary = (plumbing) => {
-  const fixtureNotes = polishFieldNote(plumbing.fixtureNotes, "general");
-  if (fixtureNotes) return fixtureNotes;
+  const rawFixtureNotes = String(plumbing.fixtureNotes || "").trim();
+  const normalizedFixtureNotes = rawFixtureNotes.toLowerCase();
+  if (rawFixtureNotes) {
+    const toiletRoomCount = normalizedFixtureNotes.match(/\b(two|2)\s+(bathrooms|toilet rooms)\b/) ? "two" : "";
+    const waterClosetCount = normalizedFixtureNotes.match(/\beach\b.*\b(two|2)\s+(toilets|water closets)\b/) ? "two" : "";
+    const lavatoryCount = normalizedFixtureNotes.match(/\b(four|4)\s+(sinks|lavatories)\b/) ? "four" : "";
+    const mounting = /mounted to (the )?ground|floor[- ]mounted/.test(normalizedFixtureNotes) ? "floor-mounted " : "";
+    const faucet = /dual|double/.test(normalizedFixtureNotes) ? " with dual-handle faucets" : "";
+
+    if (toiletRoomCount || waterClosetCount || lavatoryCount) {
+      return `The space includes ${toiletRoomCount || "the documented"} toilet rooms. Each toilet room includes ${waterClosetCount || "water closet count to be verified"} ${mounting}water closets and ${lavatoryCount || "lavatory count to be verified"} lavatories${faucet}.`;
+    }
+
+    return polishFieldNote(rawFixtureNotes, "general");
+  }
 
   const roomText = textOrPlaceholder(plumbing.toiletRoomCount, "the documented");
   const waterClosetText = textOrPlaceholder(plumbing.waterClosetCount, "water closet count to be verified");
   const lavatoryText = textOrPlaceholder(plumbing.lavatoryCount, "lavatory count to be verified");
   return `${roomText} toilet room${plumbing.toiletRoomCount === "1" ? "" : "s"}. Each toilet room includes ${waterClosetText} water closet${plumbing.waterClosetCount === "1" ? "" : "s"} and ${lavatoryText} ${textOrPlaceholder(plumbing.lavatoryMounting, "lavatory type to be verified")} lavator${plumbing.lavatoryCount === "1" ? "y" : "ies"} with ${textOrPlaceholder(plumbing.faucetType, "faucet type to be verified")}.`;
+};
+
+const formatWaterServiceLocation = (plumbing) => {
+  const rawLocation = String(plumbing.waterMeterLocation || "").trim();
+  if (!rawLocation) return "The water service location should be verified in the field.";
+
+  const location = polishFieldNote(rawLocation, "plumbing-location");
+  const lower = rawLocation.toLowerCase();
+  const serviceParts = [];
+
+  if (/rear right side|back right side/.test(lower)) {
+    serviceParts.push("The water service enters from the rear right side of the building");
+  } else if (/rear|back/.test(lower)) {
+    serviceParts.push("The water service enters from the rear side of the building");
+  }
+
+  if (/above the office|over the office|office area/.test(lower)) {
+    serviceParts.push("routes above the office area");
+  }
+
+  const meterLocation = /meter.*office|office.*meter/.test(lower)
+    ? "The water meter is located in the office area."
+    : "";
+
+  if (serviceParts.length || meterLocation) {
+    return `${serviceParts.length ? `${serviceParts.join(" and ")}.` : ""}${meterLocation ? ` ${meterLocation}` : ""}`.trim();
+  }
+
+  return location;
+};
+
+const buildPlumbingNarrative = (plumbing) => {
+  const override = polishFieldNote(plumbing.narrative, "general");
+  if (override) return override;
+
+  if (plumbing.hasWaterService === "no") {
+    return "The proposed space is not served by a dedicated water service based on information provided.";
+  }
+
+  const opening = `The proposed space is served by a separately metered ${textOrPlaceholder(plumbing.waterMeterSize, "water meter size to be verified")} water line.`;
+  const serviceLocation = plumbing.hasWaterService === "yes" ? formatWaterServiceLocation(plumbing) : "Water service information should be verified in the field.";
+  const fixtures = plumbing.hasWaterService === "yes" ? formatFixtureSummary(plumbing) : "";
+  const waterHeater = plumbing.hasWaterHeater === "yes" ? `There is also an ${textOrPlaceholder(plumbing.waterHeaterSize, "size to be verified")} tank type hot water heater.` : "";
+  const mopSink = plumbing.hasMopSink === "yes" ? "There is also a floor mop sink." : "";
+  const condition = `All of the fixtures are ${textOrPlaceholder(plumbing.fixtureCondition, "condition to be verified")}.`;
+
+  return [opening, serviceLocation, fixtures, waterHeater, mopSink, condition].filter(Boolean).join(" ");
+};
+
+const buildGasNarrative = (plumbing) => {
+  if (plumbing.hasGasService !== "yes") return "";
+  const override = polishFieldNote(plumbing.gasNarrative, "general");
+  if (override) return override;
+
+  return `The space is served by a separately metered gas service. The service is metered ${textOrPlaceholder(plumbing.gasMeterLocation, "in a location to be verified")}. The gas line routes ${polishFieldNote(textOrPlaceholder(plumbing.gasRoute, "along a route to be verified"), "route").replace(/\.$/, "")}. The gas line size is ${textOrPlaceholder(plumbing.gasPipeSize, "to be verified")} and serves ${plumbing.gasServesRtus === "yes" ? "the roof top units" : "equipment to be verified"}.`;
 };
 
 const buildMechanicalNarrative = (report) => {
@@ -252,13 +349,8 @@ const buildMechanicalNarrative = (report) => {
 const buildReportPreview = (report) => ({
   intro: `I visited the proposed ${textOrPlaceholder(report.project.projectName, "Project Name")} in ${textOrPlaceholder(report.project.cityState, "City, State")} on ${formatDate(report.project.visitDate)}. The following is summary of the mechanical, electrical, and plumbing systems at this location. The proposed space consisted of ${textOrPlaceholder(report.project.spaceDescription, "a single space which was vacant at the time of my visit")}.`,
   mechanical: buildMechanicalNarrative(report),
-  plumbing:
-    polishFieldNote(report.plumbing.narrative, "general") ||
-    `The proposed space is ${report.plumbing.hasWaterService === "no" ? "not served by a dedicated water service based on information provided" : `served by a separately metered ${textOrPlaceholder(report.plumbing.waterMeterSize, "water meter size to be verified")} water line`}. ${report.plumbing.hasWaterService === "yes" ? `The service is located ${polishFieldNote(textOrPlaceholder(report.plumbing.waterMeterLocation, "in a location to be verified"), "plumbing-location").replace(/\.$/, "")} and serves ${formatFixtureSummary(report.plumbing)} ` : ""}${report.plumbing.hasWaterHeater === "yes" ? `There is also a ${textOrPlaceholder(report.plumbing.waterHeaterSize, "size to be verified")} tank type hot water heater. ` : ""}${report.plumbing.hasMopSink === "yes" ? "There is also a floor mop sink. " : ""}All of the fixtures are ${textOrPlaceholder(report.plumbing.fixtureCondition, "condition to be verified")}.`,
-  gas:
-    report.plumbing.hasGasService === "yes"
-      ? polishFieldNote(report.plumbing.gasNarrative, "general") || `The space is served by a separately metered gas service. The service is metered ${textOrPlaceholder(report.plumbing.gasMeterLocation, "in a location to be verified")} and routes ${polishFieldNote(textOrPlaceholder(report.plumbing.gasRoute, "along a route to be verified"), "route").replace(/\.$/, "")}. The gas line size is ${textOrPlaceholder(report.plumbing.gasPipeSize, "to be verified")} and serves ${report.plumbing.gasServesRtus === "yes" ? "the roof top units" : "equipment to be verified"}.`
-      : "",
+  plumbing: buildPlumbingNarrative(report.plumbing),
+  gas: buildGasNarrative(report.plumbing),
   electrical:
     polishFieldNote(report.electrical.narrative, "general") ||
     `The proposed space is served by ${textOrPlaceholder(report.electrical.metering, "a meter configuration to be verified")} ${textOrPlaceholder(report.electrical.serviceSize, "electrical service size to be verified")}, ${textOrPlaceholder(report.electrical.voltage, "voltage to be verified")}, ${textOrPlaceholder(report.electrical.phase, "phase to be verified")} electrical service located ${textOrPlaceholder(report.electrical.serviceLocation, "in a location to be verified")}. The service routes ${polishFieldNote(textOrPlaceholder(report.electrical.serviceRoute, "along a route to be verified"), "route").replace(/\.$/, "")}. ${report.electrical.panels.map((panel) => `${textOrPlaceholder(panel.designation, "Panelboard")} is a ${textOrPlaceholder(panel.ampRating, "amp rating to be verified")}, ${textOrPlaceholder(panel.voltage, "voltage to be verified")}, ${textOrPlaceholder(panel.phase, "phase to be verified")} panelboard with ${textOrPlaceholder(panel.poleSpaces, "pole spaces to be verified")} pole spaces${panel.mainBreaker ? ` and a ${panel.mainBreaker} main circuit breaker` : ""}${panel.fedFrom ? ` which is fed from ${polishFieldNote(panel.fedFrom, "route").replace(/\.$/, "")}` : ""}.`).join(" ")} ${report.electrical.transformers.map((transformer) => `${textOrPlaceholder(transformer.designation, "Transformer")} is a ${textOrPlaceholder(transformer.kva, "kVA to be verified")} transformer located ${textOrPlaceholder(transformer.location, "in a location to be verified")} with ${textOrPlaceholder(transformer.primaryVoltage, "primary voltage to be verified")} primary and ${textOrPlaceholder(transformer.secondaryVoltage, "secondary voltage to be verified")} secondary voltage.`).join(" ")} All of the electrical equipment is ${textOrPlaceholder(report.electrical.equipmentCondition, "condition to be verified")}.`,
