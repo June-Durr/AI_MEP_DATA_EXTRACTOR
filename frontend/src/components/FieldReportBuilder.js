@@ -146,8 +146,19 @@ const sentenceCase = (value) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
+const normalizeTechnicalText = (value) =>
+  String(value || "")
+    .replace(/\bKva\b/g, "kVA")
+    .replace(/\bkva\b/g, "kVA")
+    .replace(/\b208y\/120v\b/gi, "208Y/120V")
+    .replace(/\b120\/240v\b/gi, "120/240V")
+    .replace(/\b480v\b/gi, "480V")
+    .replace(/\bsqft\b/gi, "sq. ft.")
+    .replace(/\s+\./g, ".")
+    .replace(/\.\.+/g, ".");
+
 const ensureSentence = (value) => {
-  const text = String(value || "").trim();
+  const text = normalizeTechnicalText(value).trim();
   if (!text) return "";
   return text.replace(/\s+\./g, ".").replace(/([^.!?])$/, "$1.");
 };
@@ -167,6 +178,10 @@ const polishFieldNote = (value, context = "general") => {
     .replace(/\btheyre\b/gi, "they are")
     .replace(/\btheyre\b/gi, "they are")
     .replace(/\bductowkr\b/gi, "ductwork")
+    .replace(/\bducting\b/gi, "ductwork")
+    .replace(/\bfiber glass\b/gi, "fiberglass")
+    .replace(/\bfiberglass insulated\b/gi, "fiberglass-insulated")
+    .replace(/\bflex ducting\b/gi, "flexible ductwork")
     .replace(/\binut\b/gi, "input")
     .replace(/\bback right side\b/gi, "rear right side")
     .replace(/\bcame in from\b/gi, "enters from")
@@ -201,6 +216,11 @@ const polishFieldNote = (value, context = "general") => {
   if (context === "ductwork") {
     if (/open plenum/i.test(text) && /insulated|square|rectangular|duct/i.test(text)) {
       text = "The space appears to utilize an open plenum return arrangement. The visible ductwork generally consists of interior insulated rectangular sheet metal ductwork with flexible duct connections serving the diffusers.";
+    } else if (/fiberglass|flex|diffuser|duct/i.test(text)) {
+      const hasFiberglass = /fiberglass/i.test(text);
+      const flexMatch = text.match(/(\d+\s*["']?)\s*(flex|flexible)/i);
+      const flexSize = flexMatch ? `${flexMatch[1].replace(/\s/g, "")} flexible ductwork` : "flexible ductwork";
+      text = `The observed ductwork generally consists of ${hasFiberglass ? "fiberglass-insulated ductwork" : "ductwork"} with diffuser connections served by ${flexSize}.`;
     }
   }
 
@@ -213,6 +233,83 @@ const polishFieldNote = (value, context = "general") => {
   }
 
   return ensureSentence(sentenceCase(text));
+};
+
+const stripSentencePeriod = (value) => String(value || "").trim().replace(/\.$/, "");
+
+const lowerInitialFragment = (value) => {
+  const text = String(value || "").trim();
+  if (!text || /^(RTU|T-\d+|Panel|Transformer)\b/.test(text)) return text;
+  return text.charAt(0).toLowerCase() + text.slice(1);
+};
+
+const isIncompleteReportValue = (value) => {
+  const text = String(value || "").trim().toLowerCase();
+  return (
+    !text ||
+    text === NOT_LEGIBLE.toLowerCase() ||
+    ["not available", "n/a", "na", "unknown"].includes(text) ||
+    /to be verified/.test(text) ||
+    /^amp rating$/i.test(text) ||
+    /^voltage$/i.test(text) ||
+    /^phase$/i.test(text) ||
+    /^pole spaces?$/i.test(text)
+  );
+};
+
+const formatReportLocation = (value, fallback = "in a location to be verified") => {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+
+  const lower = raw.toLowerCase();
+  if (/back right|rear right/.test(lower) && /outside|building/.test(lower)) {
+    return "outside at the rear right side of the building";
+  }
+  if (/right center|right-center/.test(lower)) {
+    return "at the right-center portion of the building";
+  }
+  if (/electrical room/.test(lower)) {
+    const side = /right/.test(lower) ? " on the right side of the building" : "";
+    return `in the electrical room${side}`;
+  }
+  if (/back office|rear office/.test(lower)) {
+    return "in the back office";
+  }
+  if (/office area/.test(lower)) {
+    return "in the office area";
+  }
+  if (/^in\b|^at\b|^outside\b|^above\b/i.test(raw)) {
+    return stripSentencePeriod(polishFieldNote(raw, "general"));
+  }
+
+  return `in ${stripSentencePeriod(polishFieldNote(raw, "general"))}`;
+};
+
+const formatReportRoute = (value, fallback = "route should be verified in the field") => {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+
+  const lower = raw.toLowerCase();
+  if (/underground/.test(lower) && /back office|rear office|back/.test(lower) && /panel/.test(lower)) {
+    return "underground from the back office to the panelboard";
+  }
+
+  let text = raw
+    .replace(/^the\s+/i, "")
+    .replace(/^service\s+(conductors\s+)?(routes?|enters?)\s+/i, "")
+    .replace(/^conduit\s+(routes?|enters?)\s+/i, "")
+    .replace(/^line\s+(routes?|enters?)\s+/i, "")
+    .replace(/^this\s+was\s+fed\s+from\s+/i, "")
+    .replace(/^was\s+fed\s+from\s+/i, "")
+    .replace(/^fed\s+from\s+/i, "");
+
+  return lowerInitialFragment(stripSentencePeriod(polishFieldNote(text, "route")));
+};
+
+const formatFedFrom = (value) => {
+  const route = formatReportRoute(value, "");
+  if (!route) return "";
+  return route.replace(/\btransformer\s+(t-\d+)/i, (_, designation) => `Transformer ${designation.toUpperCase()}`);
 };
 
 const formatFixtureSummary = (plumbing) => {
@@ -290,7 +387,93 @@ const buildGasNarrative = (plumbing) => {
   const override = polishFieldNote(plumbing.gasNarrative, "general");
   if (override) return override;
 
-  return `The space is served by a separately metered gas service. The service is metered ${textOrPlaceholder(plumbing.gasMeterLocation, "in a location to be verified")}. The gas line routes ${polishFieldNote(textOrPlaceholder(plumbing.gasRoute, "along a route to be verified"), "route").replace(/\.$/, "")}. The gas line size is ${textOrPlaceholder(plumbing.gasPipeSize, "to be verified")} and serves ${plumbing.gasServesRtus === "yes" ? "the roof top units" : "equipment to be verified"}.`;
+  return `The space is served by a separately metered gas service. The gas meter is located ${formatReportLocation(plumbing.gasMeterLocation)}. The gas line routes ${formatReportRoute(plumbing.gasRoute, "along a route to be verified")}. The gas line size is ${textOrPlaceholder(plumbing.gasPipeSize, "to be verified")} and serves ${plumbing.gasServesRtus === "yes" ? "the roof top units" : "equipment to be verified"}.`;
+};
+
+const buildElectricalNarrative = (electrical) => {
+  const override = polishFieldNote(electrical.narrative, "general");
+  if (override) return override;
+
+  const location = formatReportLocation(electrical.serviceLocation);
+  const route = formatReportRoute(electrical.serviceRoute);
+  const opening = `The proposed space is served by ${textOrPlaceholder(electrical.metering, "a meter configuration to be verified")} ${textOrPlaceholder(electrical.serviceSize, "electrical service size to be verified")}, ${textOrPlaceholder(electrical.voltage, "voltage to be verified")}, ${textOrPlaceholder(electrical.phase, "phase to be verified")} electrical service located ${location}. The service conductors route ${route}.`;
+
+  const panelText = electrical.panels
+    .map((panel, index) => {
+      const designation = panel.designation || `Panelboard ${index + 1}`;
+      const hasCoreData = [panel.ampRating, panel.voltage, panel.phase, panel.poleSpaces, panel.mainBreaker].some(
+        (item) => !isIncompleteReportValue(item)
+      );
+      const fedFrom = formatFedFrom(panel.fedFrom);
+
+      if (!hasCoreData) {
+        return `${designation} was observed${fedFrom ? ` and is fed from ${fedFrom}` : ""}; however, the panelboard rating, voltage, phase, and pole space information should be verified in the field.`;
+      }
+
+      const ampRating = isIncompleteReportValue(panel.ampRating) ? "amp rating to be verified" : panel.ampRating;
+      const voltage = isIncompleteReportValue(panel.voltage) ? "voltage to be verified" : panel.voltage;
+      const phase = isIncompleteReportValue(panel.phase) ? "phase to be verified" : panel.phase;
+      const poleSpaces = isIncompleteReportValue(panel.poleSpaces) ? "pole spaces to be verified" : panel.poleSpaces;
+      const fedFromText = fedFrom ? ` It is fed from ${fedFrom}.` : "";
+      return `${designation} is a ${ampRating}, ${voltage}, ${phase} panelboard with ${poleSpaces} pole spaces${panel.mainBreaker ? ` and a ${panel.mainBreaker} main circuit breaker` : ""}.${fedFromText}`;
+    })
+    .join(" ");
+
+  const transformerText = electrical.transformers
+    .map((transformer) => {
+      const designation = transformer.designation || "Transformer";
+      const locationText = formatReportLocation(transformer.location);
+      const kva = isIncompleteReportValue(transformer.kva) ? "kVA rating to be verified" : transformer.kva;
+      const primaryVoltage = isIncompleteReportValue(transformer.primaryVoltage) ? "primary voltage to be verified" : transformer.primaryVoltage;
+      const secondaryVoltage = isIncompleteReportValue(transformer.secondaryVoltage) ? "secondary voltage to be verified" : transformer.secondaryVoltage;
+      return `${designation} is a ${kva} transformer located ${locationText} with ${primaryVoltage} primary and ${secondaryVoltage} secondary voltage.`;
+    })
+    .join(" ");
+
+  const condition = String(electrical.equipmentCondition || "").trim();
+  const conditionText = condition.toLowerCase().startsWith("all of the electrical equipment")
+    ? polishFieldNote(condition, "general")
+    : `All of the electrical equipment is ${textOrPlaceholder(condition, "condition to be verified")}.`;
+
+  return normalizeTechnicalText([opening, panelText, transformerText, conditionText].filter(Boolean).join(" "));
+};
+
+const buildTelephoneNarrative = (electrical) => {
+  const override = polishFieldNote(electrical.telephoneNarrative, "general");
+  if (override) return override;
+
+  const location = formatReportLocation(electrical.telephoneDemarkLocation);
+  const route = formatReportRoute(electrical.telephoneRoute);
+
+  return `The telephone demarcation point is located ${location}. Telephone service routing ${route === "route should be verified in the field" ? "should be verified in the field" : `routes ${route}`}.`;
+};
+
+const buildFireNarrative = (fire) => {
+  const override = polishFieldNote(fire.narrative, "general");
+  if (override) return override;
+
+  const opening = `The proposed space is ${fire.isSprinklered === "no" ? "not documented as fully sprinklered" : "served by the building sprinkler system"}.`;
+  const mainSize = fire.mainLineSize ? String(fire.mainLineSize).replace(/\b(sprinkler|main|lines?)\b/gi, "").trim() : "";
+  const direction = formatReportRoute(fire.mainEntryDirection, "");
+  const formalDirection = /right center|right-center/i.test(fire.mainEntryDirection || "")
+    ? "the right-center portion of the building"
+    : direction;
+  const mainText = mainSize
+    ? `${mainSize} sprinkler main${/two|2|multiple/i.test(mainSize) ? "s" : ""} enter${/two|2|multiple/i.test(mainSize) ? "" : "s"} the space${formalDirection ? ` from ${formalDirection}` : ""}.`
+    : "";
+  const riserText = fire.riserLocation
+    ? `The fire sprinkler riser is located ${formatReportLocation(fire.riserLocation)}.`
+    : "";
+  const branchText = polishFieldNote(fire.branchLineNotes, "general") || "Fire protection main, branch, riser, and isolation valve information should be verified in the field.";
+
+  return normalizeTechnicalText([opening, mainText, riserText, branchText].filter(Boolean).join(" "));
+};
+
+const buildFireAlarmNarrative = (fire) => {
+  if (fire.hasFireAlarm !== "yes") return "";
+  const override = polishFieldNote(fire.alarmNarrative, "general");
+  if (override) return override;
+  return `The space is served by the building fire alarm system. The main fire alarm control panel is located ${formatReportLocation(fire.fireAlarmPanelLocation)}.`;
 };
 
 const buildMechanicalNarrative = (report) => {
@@ -347,23 +530,14 @@ const buildMechanicalNarrative = (report) => {
 };
 
 const buildReportPreview = (report) => ({
-  intro: `I visited the proposed ${textOrPlaceholder(report.project.projectName, "Project Name")} in ${textOrPlaceholder(report.project.cityState, "City, State")} on ${formatDate(report.project.visitDate)}. The following is summary of the mechanical, electrical, and plumbing systems at this location. The proposed space consisted of ${textOrPlaceholder(report.project.spaceDescription, "a single space which was vacant at the time of my visit")}.`,
+  intro: `I visited the proposed ${textOrPlaceholder(report.project.projectName, "Project Name")} in ${textOrPlaceholder(report.project.cityState, "City, State")} on ${formatDate(report.project.visitDate)}. The following is a summary of the mechanical, electrical, and plumbing systems at this location. The proposed space consisted of ${textOrPlaceholder(report.project.spaceDescription, "a single space which was vacant at the time of my visit")}.`,
   mechanical: buildMechanicalNarrative(report),
   plumbing: buildPlumbingNarrative(report.plumbing),
   gas: buildGasNarrative(report.plumbing),
-  electrical:
-    polishFieldNote(report.electrical.narrative, "general") ||
-    `The proposed space is served by ${textOrPlaceholder(report.electrical.metering, "a meter configuration to be verified")} ${textOrPlaceholder(report.electrical.serviceSize, "electrical service size to be verified")}, ${textOrPlaceholder(report.electrical.voltage, "voltage to be verified")}, ${textOrPlaceholder(report.electrical.phase, "phase to be verified")} electrical service located ${textOrPlaceholder(report.electrical.serviceLocation, "in a location to be verified")}. The service routes ${polishFieldNote(textOrPlaceholder(report.electrical.serviceRoute, "along a route to be verified"), "route").replace(/\.$/, "")}. ${report.electrical.panels.map((panel) => `${textOrPlaceholder(panel.designation, "Panelboard")} is a ${textOrPlaceholder(panel.ampRating, "amp rating to be verified")}, ${textOrPlaceholder(panel.voltage, "voltage to be verified")}, ${textOrPlaceholder(panel.phase, "phase to be verified")} panelboard with ${textOrPlaceholder(panel.poleSpaces, "pole spaces to be verified")} pole spaces${panel.mainBreaker ? ` and a ${panel.mainBreaker} main circuit breaker` : ""}${panel.fedFrom ? ` which is fed from ${polishFieldNote(panel.fedFrom, "route").replace(/\.$/, "")}` : ""}.`).join(" ")} ${report.electrical.transformers.map((transformer) => `${textOrPlaceholder(transformer.designation, "Transformer")} is a ${textOrPlaceholder(transformer.kva, "kVA to be verified")} transformer located ${textOrPlaceholder(transformer.location, "in a location to be verified")} with ${textOrPlaceholder(transformer.primaryVoltage, "primary voltage to be verified")} primary and ${textOrPlaceholder(transformer.secondaryVoltage, "secondary voltage to be verified")} secondary voltage.`).join(" ")} All of the electrical equipment is ${textOrPlaceholder(report.electrical.equipmentCondition, "condition to be verified")}.`,
-  telephone:
-    polishFieldNote(report.electrical.telephoneNarrative, "general") ||
-    `The telephone service for the space is fed from the demark located ${textOrPlaceholder(report.electrical.telephoneDemarkLocation, "in a location to be verified")}. The service ${textOrPlaceholder(report.electrical.telephoneRoute, "route should be verified in the field")}.`,
-  fire:
-    polishFieldNote(report.fire.narrative, "general") ||
-    `The proposed space is ${report.fire.isSprinklered === "no" ? "not documented as fully sprinklered" : "served by the building sprinkler system"}. ${report.fire.mainLineSize ? `${report.fire.mainLineSize} main lines enter the space from ${textOrPlaceholder(report.fire.mainEntryDirection, "a direction to be verified")}. ` : ""}${report.fire.riserLocation ? `The fire sprinkler riser is located ${report.fire.riserLocation}. ` : ""}${polishFieldNote(report.fire.branchLineNotes, "general") || "Fire protection main, branch, riser, and isolation valve information should be verified in the field."}`,
-  alarm:
-    report.fire.hasFireAlarm === "yes"
-      ? polishFieldNote(report.fire.alarmNarrative, "general") || `The space is served by the building fire alarm system with the main Fire Alarm Panel located ${textOrPlaceholder(report.fire.fireAlarmPanelLocation, "in a location to be verified")}.`
-      : "",
+  electrical: buildElectricalNarrative(report.electrical),
+  telephone: buildTelephoneNarrative(report.electrical),
+  fire: buildFireNarrative(report.fire),
+  alarm: buildFireAlarmNarrative(report.fire),
 });
 
 const inputProps = (value, onChange) => ({
