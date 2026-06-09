@@ -16,7 +16,7 @@ const emptyRtu = () => ({
   id: `rtu-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   designation: "",
   heatType: "Electric",
-  condition: "Good",
+  condition: "",
   tonnage: "",
   manufacturer: "",
   model: "",
@@ -78,6 +78,151 @@ const spaceOptions = [
   "a multi-tenant space which was partially occupied at the time of my visit",
 ];
 
+const demoSurveys = [
+  {
+    label: "Demo 1 — Westroads Mall",
+    data: {
+      project: {
+        reportDate: "2026-05-14", visitDate: "2026-05-14",
+        clientName: "James Callahan", companyName: "Westroads Retail Partners LLC",
+        companyAddress: "10000 California Street, Suite 400", companyCityStateZip: "Omaha, Nebraska 68114",
+        projectName: "Westroads Mall — Suite 147", schnackelProjectNumber: "26-0312",
+        siteAddress: "10000 California Street", siteCityStateZip: "Omaha, Nebraska 68114",
+        cityState: "Omaha, Nebraska", surveyorName: "A. Camacho",
+        squareFootage: "3500", spaceDescription: "a single space which was vacant at the time of my visit",
+      },
+      mechanical: {
+        rtus: [
+          { id: "d1r1", designation: "RTU-1", heatType: "Electric", condition: "Good", tonnage: "7.5", manufacturer: "Trane", model: "TCD090", manufacturingYear: "2015", age: "11", aiStatus: "Demo data — confirm values before use.", notes: "", gasPipeSize: "", gasRoute: "", gasNotes: "", photos: [] },
+          { id: "d1r2", designation: "RTU-2", heatType: "Electric", condition: "Good", tonnage: "5", manufacturer: "Carrier", model: "50XCQ060", manufacturingYear: "2016", age: "10", aiStatus: "Demo data — confirm values before use.", notes: "", gasPipeSize: "", gasRoute: "", gasNotes: "", photos: [] },
+        ],
+        ductworkDescription: "Interior insulated rectangular sheet metal ductwork with flexible duct connections serving the diffusers. Open plenum return.",
+      },
+      plumbing: {
+        hasWaterService: "yes", hasGasService: "no", narrative: "",
+        fixtureNotes: "Two toilet rooms. Each has two water closets and two wall-mounted lavatories with single-handle faucets.",
+        gasNarrative: "", waterMeterSize: '1"', waterMeterLocation: "rear wall, overhead above office area",
+        toiletRoomCount: "", waterClosetCount: "", lavatoryCount: "", lavatoryMounting: "", faucetType: "",
+        hasWaterHeater: "yes", waterHeaterSize: "6-gallon", waterHeaterCondition: "in good condition",
+        hasMopSink: "no", fixtureCondition: "in good condition and should be considered for reuse",
+        gasMeterLocation: "", gasPipeSize: "", gasRoute: "", gasServesRtus: "unknown",
+      },
+      electrical: {
+        serviceSize: "200-amp", voltage: "120/208V", phase: "3-phase, 4-wire", metering: "a separately metered",
+        serviceLocation: "Mall Mechanical Room", serviceRoute: "overhead in conduit to Panelboard 1",
+        panelNotes: "", equipmentCondition: "in good condition and should be reused",
+        narrative: "", telephoneNarrative: "",
+        telephoneDemarkLocation: "Mall Mechanical Room", telephoneRoute: "runs overhead without conduit to a telephone backboard",
+        panels: [{ id: "d1p1", designation: "Panelboard 1", ampRating: "200-amp", voltage: "120/208V", phase: "3-phase, 4-wire", poleSpaces: "42-pole spaces", mainBreaker: "200-amp, 3-pole", fedFrom: "mall service switch", condition: "" }],
+        transformers: [],
+      },
+      fire: {
+        isSprinklered: "yes", hasFireAlarm: "no", sprinklerNotes: "", narrative: "", alarmNarrative: "",
+        mainLineSize: 'two 3" mains', mainEntryDirection: "from the south",
+        riserLocation: "Mall Mechanical Room on the rear of the building",
+        branchLineNotes: '3" mains run side-to-side with 1-1/4" branch lines running front-to-back.',
+        isolationValve: "yes", fireAlarmPanelLocation: "",
+      },
+    },
+  },
+  {
+    label: "Demo 2 — Shadow Lake",
+    data: {
+      project: {
+        reportDate: "2026-05-21", visitDate: "2026-05-20",
+        clientName: "Maria Torres", companyName: "Shadow Lake Management LLC",
+        companyAddress: "7775 Olson Drive, Suite 300", companyCityStateZip: "Papillion, Nebraska 68046",
+        projectName: "Shadow Lake Towne Center — Suite 225", schnackelProjectNumber: "26-0398",
+        siteAddress: "7775 Olson Drive", siteCityStateZip: "Papillion, Nebraska 68046",
+        cityState: "Papillion, Nebraska", surveyorName: "A. Camacho",
+        squareFootage: "5200", spaceDescription: "a single space which was occupied at the time of my visit",
+      },
+      mechanical: {
+        rtus: [
+          { id: "d2r1", designation: "RTU-1", heatType: "Gas", condition: "Fair", tonnage: "10", manufacturer: "Carrier", model: "48HCEF12", manufacturingYear: "2012", age: "14", aiStatus: "Demo data — confirm values before use.", notes: "Unit shows wear; recommend assessment for replacement.", gasPipeSize: '1-1/4"', gasRoute: "from exterior gas meter, rises to roof curb", gasNotes: "", photos: [] },
+          { id: "d2r2", designation: "RTU-2", heatType: "Gas", condition: "Good", tonnage: "7.5", manufacturer: "Trane", model: "TCC090", manufacturingYear: "2018", age: "8", aiStatus: "Demo data — confirm values before use.", notes: "", gasPipeSize: '1"', gasRoute: "from exterior gas meter, rises to roof curb", gasNotes: "", photos: [] },
+          { id: "d2r3", designation: "RTU-3", heatType: "Gas", condition: "Good", tonnage: "5", manufacturer: "Lennox", model: "LGH060H4E", manufacturingYear: "2018", age: "8", aiStatus: "Demo data — confirm values before use.", notes: "", gasPipeSize: '1"', gasRoute: "from exterior gas meter, rises to roof curb", gasNotes: "", photos: [] },
+        ],
+        ductworkDescription: "Open plenum return arrangement. The visible ductwork consists of interior insulated rectangular sheet metal ductwork with flexible duct connections serving the diffusers.",
+      },
+      plumbing: {
+        hasWaterService: "yes", hasGasService: "yes", narrative: "",
+        fixtureNotes: "Two toilet rooms. Each has two water closets and two wall-mounted lavatories with single-handle faucets.",
+        gasNarrative: "", waterMeterSize: '1-1/2"', waterMeterLocation: "rear wall, overhead above office area",
+        toiletRoomCount: "", waterClosetCount: "", lavatoryCount: "", lavatoryMounting: "", faucetType: "",
+        hasWaterHeater: "yes", waterHeaterSize: "40-gallon", waterHeaterCondition: "in good condition",
+        hasMopSink: "yes", fixtureCondition: "in good condition and should be considered for reuse",
+        gasMeterLocation: "west side/rear of building", gasPipeSize: '1-1/4"',
+        gasRoute: "to roof to serve rooftop units", gasServesRtus: "yes",
+      },
+      electrical: {
+        serviceSize: "400-amp", voltage: "120/208V", phase: "3-phase, 4-wire", metering: "a separately metered",
+        serviceLocation: "rear electrical room", serviceRoute: "overhead in conduit to Panelboard 1",
+        panelNotes: "", equipmentCondition: "in good condition and should be reused",
+        narrative: "", telephoneNarrative: "",
+        telephoneDemarkLocation: "rear electrical room", telephoneRoute: "runs overhead without conduit to a telephone backboard",
+        panels: [
+          { id: "d2p1", designation: "Panelboard 1", ampRating: "200-amp", voltage: "120/208V", phase: "3-phase, 4-wire", poleSpaces: "42-pole spaces", mainBreaker: "200-amp, 3-pole", fedFrom: "service switch", condition: "" },
+          { id: "d2p2", designation: "Panelboard 2", ampRating: "100-amp", voltage: "120/208V", phase: "3-phase, 4-wire", poleSpaces: "24-pole spaces", mainBreaker: "100-amp, 3-pole", fedFrom: "Panelboard 1 subfeed breaker", condition: "" },
+        ],
+        transformers: [],
+      },
+      fire: {
+        isSprinklered: "yes", hasFireAlarm: "yes", sprinklerNotes: "", narrative: "", alarmNarrative: "",
+        mainLineSize: 'two 2" mains', mainEntryDirection: "from the south",
+        riserLocation: "rear mechanical room",
+        branchLineNotes: '2" mains run side-to-side with 1" branch lines running front-to-back.',
+        isolationValve: "yes", fireAlarmPanelLocation: "rear electrical room",
+      },
+    },
+  },
+  {
+    label: "Demo 3 — Regency Court",
+    data: {
+      project: {
+        reportDate: "2026-06-02", visitDate: "2026-05-29",
+        clientName: "David Park", companyName: "Regency Court Properties Inc.",
+        companyAddress: "1414 Harney Street, Suite 200", companyCityStateZip: "Omaha, Nebraska 68102",
+        projectName: "Regency Court — Suite 310", schnackelProjectNumber: "26-0421",
+        siteAddress: "1414 Harney Street", siteCityStateZip: "Omaha, Nebraska 68102",
+        cityState: "Omaha, Nebraska", surveyorName: "A. Camacho",
+        squareFootage: "2800", spaceDescription: "a multi-tenant space which was partially occupied at the time of my visit",
+      },
+      mechanical: {
+        rtus: [
+          { id: "d3r1", designation: "RTU-1", heatType: "Electric", condition: "Good", tonnage: "5", manufacturer: "Lennox", model: "XC25-060-230", manufacturingYear: "2019", age: "7", aiStatus: "Demo data — confirm values before use.", notes: "", gasPipeSize: "", gasRoute: "", gasNotes: "", photos: [] },
+        ],
+        ductworkDescription: "Interior insulated rectangular sheet metal ductwork with flexible duct connections to ceiling diffusers.",
+      },
+      plumbing: {
+        hasWaterService: "yes", hasGasService: "no", narrative: "",
+        fixtureNotes: "One toilet room with one water closet and one lavatory with a single-handle faucet.",
+        gasNarrative: "", waterMeterSize: '3/4"', waterMeterLocation: "exterior right side of building",
+        toiletRoomCount: "", waterClosetCount: "", lavatoryCount: "", lavatoryMounting: "", faucetType: "",
+        hasWaterHeater: "no", waterHeaterSize: "", waterHeaterCondition: "",
+        hasMopSink: "no", fixtureCondition: "in good condition and should be considered for reuse",
+        gasMeterLocation: "", gasPipeSize: "", gasRoute: "", gasServesRtus: "unknown",
+      },
+      electrical: {
+        serviceSize: "200-amp", voltage: "120/208V", phase: "3-phase, 4-wire", metering: "a separately metered",
+        serviceLocation: "back office area", serviceRoute: "overhead in conduit to Panelboard 1",
+        panelNotes: "", equipmentCondition: "in good condition and should be reused",
+        narrative: "", telephoneNarrative: "",
+        telephoneDemarkLocation: "back office area", telephoneRoute: "runs overhead without conduit to a telephone backboard",
+        panels: [{ id: "d3p1", designation: "Panelboard 1", ampRating: "200-amp", voltage: "120/208V", phase: "3-phase, 4-wire", poleSpaces: "42-pole spaces", mainBreaker: "200-amp, 3-pole", fedFrom: "service switch", condition: "" }],
+        transformers: [],
+      },
+      fire: {
+        isSprinklered: "yes", hasFireAlarm: "no", sprinklerNotes: "", narrative: "", alarmNarrative: "",
+        mainLineSize: 'one 3" main', mainEntryDirection: "from the south",
+        riserLocation: "rear mechanical room",
+        branchLineNotes: '3" main runs side-to-side with 1-1/4" branch lines running front-to-back.',
+        isolationValve: "yes", fireAlarmPanelLocation: "",
+      },
+    },
+  },
+];
+
 const emptyPanel = () => ({
   id: `panel-${Date.now()}-${Math.random().toString(16).slice(2)}`,
   designation: "",
@@ -87,7 +232,7 @@ const emptyPanel = () => ({
   poleSpaces: "",
   mainBreaker: "",
   fedFrom: "",
-  condition: "good condition and should be reused",
+  condition: "",
 });
 
 const emptyTransformer = () => ({
@@ -100,7 +245,7 @@ const emptyTransformer = () => ({
   primaryVoltage: "",
   secondaryVoltage: "",
   location: "",
-  condition: "good condition and should be reused",
+  condition: "",
   aiStatus: "Not analyzed",
   photos: [],
 });
@@ -375,9 +520,10 @@ const buildPlumbingNarrative = (plumbing) => {
   const opening = `The proposed space is served by a separately metered ${textOrPlaceholder(plumbing.waterMeterSize, "water meter size to be verified")} water line.`;
   const serviceLocation = plumbing.hasWaterService === "yes" ? formatWaterServiceLocation(plumbing) : "Water service information should be verified in the field.";
   const fixtures = plumbing.hasWaterService === "yes" ? formatFixtureSummary(plumbing) : "";
-  const waterHeater = plumbing.hasWaterHeater === "yes" ? `There is also an ${textOrPlaceholder(plumbing.waterHeaterSize, "size to be verified")} tank type hot water heater.` : "";
+  const waterHeaterConditionText = plumbing.waterHeaterCondition && plumbing.waterHeaterCondition !== "not observed" ? ` ${plumbing.waterHeaterCondition}` : "";
+  const waterHeater = plumbing.hasWaterHeater === "yes" ? `There is also an ${textOrPlaceholder(plumbing.waterHeaterSize, "size to be verified")} tank type hot water heater${waterHeaterConditionText}.` : "";
   const mopSink = plumbing.hasMopSink === "yes" ? "There is also a floor mop sink." : "";
-  const condition = `All of the fixtures are ${textOrPlaceholder(plumbing.fixtureCondition, "condition to be verified")}.`;
+  const condition = plumbing.fixtureCondition ? `All of the fixtures are ${plumbing.fixtureCondition}.` : "";
 
   return [opening, serviceLocation, fixtures, waterHeater, mopSink, condition].filter(Boolean).join(" ");
 };
@@ -431,9 +577,10 @@ const buildElectricalNarrative = (electrical) => {
     .join(" ");
 
   const condition = String(electrical.equipmentCondition || "").trim();
-  const conditionText = condition.toLowerCase().startsWith("all of the electrical equipment")
-    ? polishFieldNote(condition, "general")
-    : `All of the electrical equipment is ${textOrPlaceholder(condition, "condition to be verified")}.`;
+  const conditionText = !condition ? "" :
+    condition.toLowerCase().startsWith("all of the electrical equipment")
+      ? polishFieldNote(condition, "general")
+      : `All of the electrical equipment is ${condition}.`;
 
   return normalizeTechnicalText([opening, panelText, transformerText, conditionText].filter(Boolean).join(" "));
 };
@@ -976,8 +1123,9 @@ export default function FieldReportBuilder() {
       faucetType: "",
       hasWaterHeater: "unknown",
       waterHeaterSize: "",
+      waterHeaterCondition: "",
       hasMopSink: "unknown",
-      fixtureCondition: "in good condition and should be considered for reuse",
+      fixtureCondition: "",
       gasMeterLocation: "",
       gasPipeSize: "",
       gasRoute: "",
@@ -991,7 +1139,7 @@ export default function FieldReportBuilder() {
       serviceLocation: "",
       serviceRoute: "",
       panelNotes: "",
-      equipmentCondition: "All of the electrical equipment is in good condition and should be reused.",
+      equipmentCondition: "",
       narrative: "",
       telephoneNarrative: "",
       telephoneDemarkLocation: "",
@@ -1264,6 +1412,25 @@ export default function FieldReportBuilder() {
     }
   };
 
+  const loadDemoSurvey = (index) => {
+    const demo = demoSurveys[index];
+    const ts = Date.now();
+    setReport({
+      ...demo.data,
+      mechanical: {
+        ...demo.data.mechanical,
+        rtus: demo.data.mechanical.rtus.map((rtu) => ({ ...rtu, id: `rtu-${ts}-${Math.random().toString(16).slice(2)}` })),
+      },
+      electrical: {
+        ...demo.data.electrical,
+        panels: demo.data.electrical.panels.map((panel) => ({ ...panel, id: `panel-${ts}-${Math.random().toString(16).slice(2)}` })),
+        transformers: [],
+      },
+    });
+    setReportWasEdited(false);
+    setActiveStep("project");
+  };
+
   const missingItems = useMemo(() => {
     const items = [];
     if (!report.project.clientName) items.push("Client name");
@@ -1324,9 +1491,23 @@ export default function FieldReportBuilder() {
     <div className="container">
       <div className="card" style={{ marginBottom: 20 }}>
         <h1 style={{ margin: "0 0 8px", color: "#0f172a" }}>Field Report Builder</h1>
-        <p style={{ margin: 0, color: "#64748b" }}>
+        <p style={{ margin: "0 0 14px", color: "#64748b" }}>
           Build a client-ready existing conditions report from guided survey inputs.
         </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", borderTop: "1px solid #e2e8f0", paddingTop: 14 }}>
+          <span style={{ fontWeight: 600, fontSize: 13, color: "#475569" }}>Load Demo Survey:</span>
+          {demoSurveys.map((demo, index) => (
+            <button
+              key={index}
+              type="button"
+              className="btn"
+              style={{ background: "#0369a1", color: "#fff", fontSize: 13, padding: "6px 14px" }}
+              onClick={() => loadDemoSurvey(index)}
+            >
+              {demo.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="field-report-shell">
@@ -1461,10 +1642,11 @@ export default function FieldReportBuilder() {
                       </Field>
                       <Field label="Condition">
                         <select className="field-report-select" {...inputProps(rtu.condition, (value) => updateRtu(rtu.id, { condition: value }))}>
-                          <option>Good</option>
-                          <option>Fair</option>
-                          <option>Poor</option>
-                          <option>Not observed</option>
+                          <option value="">Select condition...</option>
+                          <option value="Good">Good</option>
+                          <option value="Fair">Fair</option>
+                          <option value="Poor">Poor</option>
+                          <option value="Not observed">Not observed</option>
                         </select>
                       </Field>
                     </div>
@@ -1546,18 +1728,19 @@ export default function FieldReportBuilder() {
             <section>
               <h2>Plumbing Systems</h2>
               <p className="field-report-help">
-                These questions follow the template: water meter, toilet rooms, lavatories, water heater, mop sink, fixture condition, and gas service route.
+                Document each category below. Relevant fields appear automatically when you answer each question.
               </p>
-              <div className="field-report-grid">
-                <Field label="Is there a water service?" help="Use Unknown if the water service could not be verified during the visit.">
-                  <ToggleGroup value={report.plumbing.hasWaterService} onChange={(value) => updateSection("plumbing", { hasWaterService: value })} />
-                </Field>
-                <Field label="Is there a gas service?">
-                  <ToggleGroup value={report.plumbing.hasGasService} onChange={(value) => updateSection("plumbing", { hasGasService: value })} />
-                </Field>
+
+              <h3>Water Service</h3>
+              <div className="field-report-rtu">
+                <div className="field-report-grid">
+                  <Field label="Is there a water service?" help="Use Unknown if the water service could not be verified during the visit.">
+                    <ToggleGroup value={report.plumbing.hasWaterService} onChange={(value) => updateSection("plumbing", { hasWaterService: value })} />
+                  </Field>
+                </div>
                 {report.plumbing.hasWaterService === "yes" && (
-                  <>
-                    <Field label="Water Meter Size" help="Measure the service pipe entering/leaving the tenant water meter, not the small pipe at a sink. Common examples: 3/4 inch, 1 inch, 1-1/2 inch.">
+                  <div className="field-report-grid" style={{ marginTop: 14 }}>
+                    <Field label="Water Meter Size" help="Measure the service pipe entering/leaving the tenant water meter, not a small fixture branch. Common examples: 3/4 inch, 1 inch, 1-1/2 inch.">
                       <input className="field-report-input" placeholder='3/4"' {...inputProps(report.plumbing.waterMeterSize, (value) => updateSection("plumbing", { waterMeterSize: value }))} />
                       <GuideButton topic="waterMeter" onOpen={setActiveGuide} />
                     </Field>
@@ -1567,40 +1750,73 @@ export default function FieldReportBuilder() {
                     <Field label="Bathroom Fixture Notes" full help="Use one note instead of many boxes. The report will format it into a professional fixture description.">
                       <textarea
                         className="field-report-textarea"
-                        placeholder="Example: Two toilet rooms. Each has two water closets and two wall-mounted lavatories with single-handle faucets. Or: Men's room has 2 toilets, 1 urinal, 2 sinks; women's room has 3 toilets and 2 sinks."
+                        placeholder="Example: Two toilet rooms. Each has two water closets and two wall-mounted lavatories with single-handle faucets."
                         {...inputProps(report.plumbing.fixtureNotes, (value) => updateSection("plumbing", { fixtureNotes: value }))}
                       />
                     </Field>
-                  </>
+                  </div>
                 )}
-                <Field label="Hot Water Heater?">
-                  <ToggleGroup value={report.plumbing.hasWaterHeater} onChange={(value) => updateSection("plumbing", { hasWaterHeater: value })} />
-                </Field>
-                {report.plumbing.hasWaterHeater === "yes" && (
-                  <Field label="Water Heater Size">
-                    <input className="field-report-input" placeholder="6-gallon" {...inputProps(report.plumbing.waterHeaterSize, (value) => updateSection("plumbing", { waterHeaterSize: value }))} />
+              </div>
+
+              <h3>Hot Water Heater</h3>
+              <div className="field-report-rtu">
+                <div className="field-report-grid">
+                  <Field label="Hot Water Heater Present?">
+                    <ToggleGroup value={report.plumbing.hasWaterHeater} onChange={(value) => updateSection("plumbing", { hasWaterHeater: value })} />
                   </Field>
+                </div>
+                {report.plumbing.hasWaterHeater === "yes" && (
+                  <div className="field-report-grid three" style={{ marginTop: 14 }}>
+                    <Field label="Size">
+                      <input className="field-report-input" placeholder="6-gallon" {...inputProps(report.plumbing.waterHeaterSize, (value) => updateSection("plumbing", { waterHeaterSize: value }))} />
+                    </Field>
+                    <Field label="Condition">
+                      <select className="field-report-select" {...inputProps(report.plumbing.waterHeaterCondition, (value) => updateSection("plumbing", { waterHeaterCondition: value }))}>
+                        <option value="">Select condition...</option>
+                        <option value="in good condition">Good</option>
+                        <option value="in fair condition">Fair</option>
+                        <option value="in poor condition">Poor</option>
+                        <option value="not observed">Not observed</option>
+                      </select>
+                    </Field>
+                  </div>
                 )}
-                <Field label="Mop Sink?">
-                  <ToggleGroup value={report.plumbing.hasMopSink} onChange={(value) => updateSection("plumbing", { hasMopSink: value })} />
-                </Field>
-                <Field label="Fixture Condition">
-                  <select className="field-report-select" {...inputProps(report.plumbing.fixtureCondition, (value) => updateSection("plumbing", { fixtureCondition: value }))}>
-                    <option>in excellent condition and should be considered for reuse</option>
-                    <option>in good condition and should be considered for reuse</option>
-                    <option>in fair condition and should be reviewed for reuse</option>
-                    <option>in poor condition and should be replaced</option>
-                    <option>not observed</option>
-                  </select>
-                </Field>
+              </div>
+
+              <h3>Mop Sink &amp; Fixture Condition</h3>
+              <div className="field-report-rtu">
+                <div className="field-report-grid">
+                  <Field label="Mop Sink Present?">
+                    <ToggleGroup value={report.plumbing.hasMopSink} onChange={(value) => updateSection("plumbing", { hasMopSink: value })} />
+                  </Field>
+                  <Field label="Overall Fixture Condition">
+                    <select className="field-report-select" {...inputProps(report.plumbing.fixtureCondition, (value) => updateSection("plumbing", { fixtureCondition: value }))}>
+                      <option value="">Select condition...</option>
+                      <option value="in excellent condition and should be considered for reuse">Excellent — reuse</option>
+                      <option value="in good condition and should be considered for reuse">Good — reuse</option>
+                      <option value="in fair condition and should be reviewed for reuse">Fair — review for reuse</option>
+                      <option value="in poor condition and should be replaced">Poor — replace</option>
+                      <option value="not observed">Not observed</option>
+                    </select>
+                  </Field>
+                </div>
+              </div>
+
+              <h3>Gas Service</h3>
+              <div className="field-report-rtu">
+                <div className="field-report-grid">
+                  <Field label="Is there a gas service?">
+                    <ToggleGroup value={report.plumbing.hasGasService} onChange={(value) => updateSection("plumbing", { hasGasService: value })} />
+                  </Field>
+                </div>
                 {report.plumbing.hasGasService === "yes" && (
-                  <>
+                  <div className="field-report-grid" style={{ marginTop: 14 }}>
                     <Field label="Gas Meter Location">
-                      <input className="field-report-input" placeholder="west side/rear of building, approximately 120 feet south" {...inputProps(report.plumbing.gasMeterLocation, (value) => updateSection("plumbing", { gasMeterLocation: value }))} />
+                      <input className="field-report-input" placeholder="west side/rear of building" {...inputProps(report.plumbing.gasMeterLocation, (value) => updateSection("plumbing", { gasMeterLocation: value }))} />
                       <GuideButton topic="gasMeter" onOpen={setActiveGuide} />
                     </Field>
                     <Field label="Gas Pipe Size">
-                      <input className="field-report-input" placeholder='1-1/4" increasing to 2-3/8"' {...inputProps(report.plumbing.gasPipeSize, (value) => updateSection("plumbing", { gasPipeSize: value }))} />
+                      <input className="field-report-input" placeholder='1-1/4"' {...inputProps(report.plumbing.gasPipeSize, (value) => updateSection("plumbing", { gasPipeSize: value }))} />
                     </Field>
                     <Field label="Gas Route">
                       <input className="field-report-input" placeholder="to roof to serve rooftop units" {...inputProps(report.plumbing.gasRoute, (value) => updateSection("plumbing", { gasRoute: value }))} />
@@ -1608,12 +1824,15 @@ export default function FieldReportBuilder() {
                     <Field label="Gas Serves RTUs?">
                       <ToggleGroup value={report.plumbing.gasServesRtus} onChange={(value) => updateSection("plumbing", { gasServesRtus: value })} />
                     </Field>
-                    <Field label="Override Gas Narrative" full help="Optional final wording. Example: Gas service enters at the west exterior wall, rises to the roof, and serves the existing gas-fired rooftop units.">
+                    <Field label="Override Gas Narrative" full help="Optional. Example: Gas service enters at the west exterior wall, rises to the roof, and serves the existing gas-fired rooftop units.">
                       <textarea className="field-report-textarea" {...inputProps(report.plumbing.gasNarrative, (value) => updateSection("plumbing", { gasNarrative: value }))} />
                     </Field>
-                  </>
+                  </div>
                 )}
-                <Field label="Override Plumbing Narrative" full help="Optional final wording. Example: Water service enters above the rear office area and serves two toilet rooms with wall-mounted lavatories and tank-type water heating.">
+              </div>
+
+              <div className="field-report-grid" style={{ marginTop: 18 }}>
+                <Field label="Override Plumbing Narrative" full help="Optional. Use only if the generated plumbing paragraph needs special handling.">
                   <textarea
                     className="field-report-textarea"
                     placeholder="Only use this if the generated plumbing paragraph needs special handling."
@@ -1652,11 +1871,12 @@ export default function FieldReportBuilder() {
                 </Field>
                 <Field label="Equipment Condition">
                   <select className="field-report-select" {...inputProps(report.electrical.equipmentCondition, (value) => updateSection("electrical", { equipmentCondition: value }))}>
-                    <option>in excellent condition and should be reused</option>
-                    <option>in good condition and should be reused</option>
-                    <option>in fair condition and should be reviewed for reuse</option>
-                    <option>in poor condition and should be replaced</option>
-                    <option>not observed</option>
+                    <option value="">Select condition...</option>
+                    <option value="in excellent condition and should be reused">Excellent — reuse</option>
+                    <option value="in good condition and should be reused">Good — reuse</option>
+                    <option value="in fair condition and should be reviewed for reuse">Fair — review for reuse</option>
+                    <option value="in poor condition and should be replaced">Poor — replace</option>
+                    <option value="not observed">Not observed</option>
                   </select>
                 </Field>
               </div>
@@ -1785,49 +2005,65 @@ export default function FieldReportBuilder() {
             <section>
               <h2>Fire Protection Systems</h2>
               <p className="field-report-help">
-                Capture whether the space is sprinklered, where the riser is, main line sizes, branch lines, isolation valves, and fire alarm panel location.
+                Answer each question below. Relevant fields appear automatically based on your selections.
               </p>
-              <div className="field-report-guide-note" style={{ marginBottom: 16 }}>
-                <strong>Fire alarm system detail.</strong> Verify whether the tenant space has fire alarm notification devices such as horn/strobes, pull stations, smoke/duct detectors, flow or tamper monitoring, and the Fire Alarm Control Unit location. If you only see devices but not the panel, note the visible devices and mark the panel location as not observed.
-              </div>
-              <div className="field-report-grid">
-                <Field label="Is the space sprinklered?">
-                  <ToggleGroup value={report.fire.isSprinklered} onChange={(value) => updateSection("fire", { isSprinklered: value })} />
-                </Field>
-                <Field label="Is there a fire alarm system?">
-                  <ToggleGroup value={report.fire.hasFireAlarm} onChange={(value) => updateSection("fire", { hasFireAlarm: value })} />
-                </Field>
-                <Field label="Main Line Size" help="Look for sprinkler main labels or visible pipe size. Example: two 3 inch mains.">
-                  <input className="field-report-input" placeholder='two 3" main lines' {...inputProps(report.fire.mainLineSize, (value) => updateSection("fire", { mainLineSize: value }))} />
-                  <GuideButton topic="mainLine" onOpen={setActiveGuide} />
-                </Field>
-                <Field label="Main Entry Direction" help="Direction the sprinkler main piping enters the tenant space from, such as from the south mall corridor or rear wall. This is not necessarily the riser location.">
-                  <input className="field-report-input" placeholder="from the south" {...inputProps(report.fire.mainEntryDirection, (value) => updateSection("fire", { mainEntryDirection: value }))} />
-                </Field>
-                <Field label="Riser Location" help="Physical location of the riser assembly with valves/gauges, such as the rear mechanical room. The main may enter from one direction while the riser sits in a different room or wall.">
-                  <input className="field-report-input" placeholder="Mall Mechanical Room on the rear of the building" {...inputProps(report.fire.riserLocation, (value) => updateSection("fire", { riserLocation: value }))} />
-                  <GuideButton topic="riser" onOpen={setActiveGuide} />
-                </Field>
-                <Field label="Isolation Valve?">
-                  <ToggleGroup value={report.fire.isolationValve} onChange={(value) => updateSection("fire", { isolationValve: value })} />
-                </Field>
-                <Field label="Branch Line / Tap Notes" full help="Example: 4-1/2 inch mains run side-to-side with 1-1/4 inch branch lines running front-to-back.">
-                  <textarea className="field-report-textarea" {...inputProps(report.fire.branchLineNotes, (value) => updateSection("fire", { branchLineNotes: value }))} />
-                  <button type="button" className="field-report-help-button" onClick={() => setActiveGuide("branchLine")}>
-                    Show branch line guide
-                  </button>
-                </Field>
-                <Field label="Fire Alarm Panel Location" full>
-                  <input className="field-report-input" placeholder="Mall Mechanical Room" {...inputProps(report.fire.fireAlarmPanelLocation, (value) => updateSection("fire", { fireAlarmPanelLocation: value }))} />
-                  <GuideButton topic="fireAlarmPanel" onOpen={setActiveGuide} />
-                </Field>
-                <Field label="Override Fire Protection Narrative" full help="Optional final wording. Example: The tenant space is served by the building wet-pipe sprinkler system. Main piping enters from the south and the riser is located in the rear mechanical room.">
-                  <textarea className="field-report-textarea" placeholder="Only use this if the generated sprinkler paragraph needs special handling." {...inputProps(report.fire.narrative, (value) => updateSection("fire", { narrative: value }))} />
-                </Field>
-                {report.fire.hasFireAlarm === "yes" && (
-                  <Field label="Override Fire Alarm Narrative" full help="Optional final wording. Example: The space is provided with fire alarm notification devices connected to the building fire alarm system; the main panel is located in the rear electrical room.">
-                    <textarea className="field-report-textarea" placeholder="Only use this if the generated fire alarm paragraph needs special handling." {...inputProps(report.fire.alarmNarrative, (value) => updateSection("fire", { alarmNarrative: value }))} />
+
+              <h3>Sprinkler System</h3>
+              <div className="field-report-rtu">
+                <div className="field-report-grid">
+                  <Field label="Is the space sprinklered?">
+                    <ToggleGroup value={report.fire.isSprinklered} onChange={(value) => updateSection("fire", { isSprinklered: value })} />
                   </Field>
+                </div>
+                {report.fire.isSprinklered === "yes" && (
+                  <div className="field-report-grid" style={{ marginTop: 14 }}>
+                    <Field label="Main Line Size" help="Look for sprinkler main labels or visible pipe size. Example: two 3 inch mains.">
+                      <input className="field-report-input" placeholder='two 3" main lines' {...inputProps(report.fire.mainLineSize, (value) => updateSection("fire", { mainLineSize: value }))} />
+                      <GuideButton topic="mainLine" onOpen={setActiveGuide} />
+                    </Field>
+                    <Field label="Main Entry Direction" help="Direction the sprinkler main piping enters the tenant space from, such as from the south mall corridor or rear wall.">
+                      <input className="field-report-input" placeholder="from the south" {...inputProps(report.fire.mainEntryDirection, (value) => updateSection("fire", { mainEntryDirection: value }))} />
+                    </Field>
+                    <Field label="Riser Location" help="Physical location of the riser assembly with valves/gauges. The main may enter from a different direction than where the riser sits.">
+                      <input className="field-report-input" placeholder="Mall Mechanical Room on the rear of the building" {...inputProps(report.fire.riserLocation, (value) => updateSection("fire", { riserLocation: value }))} />
+                      <GuideButton topic="riser" onOpen={setActiveGuide} />
+                    </Field>
+                    <Field label="Isolation Valve?">
+                      <ToggleGroup value={report.fire.isolationValve} onChange={(value) => updateSection("fire", { isolationValve: value })} />
+                    </Field>
+                    <Field label="Branch Line / Tap Notes" full help="Example: 4-1/2 inch mains run side-to-side with 1-1/4 inch branch lines running front-to-back.">
+                      <textarea className="field-report-textarea" {...inputProps(report.fire.branchLineNotes, (value) => updateSection("fire", { branchLineNotes: value }))} />
+                      <button type="button" className="field-report-help-button" onClick={() => setActiveGuide("branchLine")}>
+                        Show branch line guide
+                      </button>
+                    </Field>
+                    <Field label="Override Fire Protection Narrative" full help="Optional. Example: The tenant space is served by the building wet-pipe sprinkler system. Main piping enters from the south and the riser is located in the rear mechanical room.">
+                      <textarea className="field-report-textarea" placeholder="Only use this if the generated sprinkler paragraph needs special handling." {...inputProps(report.fire.narrative, (value) => updateSection("fire", { narrative: value }))} />
+                    </Field>
+                  </div>
+                )}
+              </div>
+
+              <h3>Fire Alarm System</h3>
+              <div className="field-report-guide-note" style={{ marginBottom: 12 }}>
+                <strong>Fire alarm tip.</strong> Verify whether the tenant space has horn/strobes, pull stations, smoke detectors, or duct detectors. If you see devices but not the panel, note visible devices and mark the panel location as not observed.
+              </div>
+              <div className="field-report-rtu">
+                <div className="field-report-grid">
+                  <Field label="Is there a fire alarm system?">
+                    <ToggleGroup value={report.fire.hasFireAlarm} onChange={(value) => updateSection("fire", { hasFireAlarm: value })} />
+                  </Field>
+                </div>
+                {report.fire.hasFireAlarm === "yes" && (
+                  <div className="field-report-grid" style={{ marginTop: 14 }}>
+                    <Field label="Fire Alarm Panel Location" full>
+                      <input className="field-report-input" placeholder="Mall Mechanical Room" {...inputProps(report.fire.fireAlarmPanelLocation, (value) => updateSection("fire", { fireAlarmPanelLocation: value }))} />
+                      <GuideButton topic="fireAlarmPanel" onOpen={setActiveGuide} />
+                    </Field>
+                    <Field label="Override Fire Alarm Narrative" full help="Optional. Example: The space is provided with fire alarm notification devices connected to the building fire alarm system; the main panel is located in the rear electrical room.">
+                      <textarea className="field-report-textarea" placeholder="Only use this if the generated fire alarm paragraph needs special handling." {...inputProps(report.fire.alarmNarrative, (value) => updateSection("fire", { alarmNarrative: value }))} />
+                    </Field>
+                  </div>
                 )}
               </div>
             </section>
